@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Beauty Filter — Learning Demo (Level 5)</title>
+<style>
+  body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+
+  /* video stays hidden — we show the PROCESSED canvas instead */
+  #video { display: none; }
+
+  #outCanvas {
+    position: absolute; top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    transform: scaleX(-1); /* selfie mirror */
+  }
+
+  #startBtn {
+    position: absolute; z-index: 10;
+    top: 50%; left: 50%; transform: translate(-50%,-50%);
+    padding: 16px 32px; font-size: 18px; border-radius: 30px;
+    border: none; background: #e84393; color: #fff; cursor: pointer;
+  }
+
+  #panel {
+    position: absolute; z-index: 5; bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0,0,0,.55); backdrop-filter: blur(8px);
+    border-radius: 14px; padding: 14px 22px; color: #fff;
+    font-size: 13px; display: flex; gap: 24px; align-items: center;
+  }
+  #panel label { display: flex; flex-direction: column; gap: 4px; }
+  #panel input[type=range] { width: 140px; accent-color: #e84393; }
+  #panel button {
+    padding: 8px 16px; border-radius: 10px; border: none;
+    background: rgba(255,255,255,.15); color: #fff; cursor: pointer;
+  }
+  #panel button:active { background: #e84393; }
+</style>
+</head>
+<body>
+
+<video id="video" autoplay playsinline muted></video>
+<canvas id="outCanvas"></canvas>
+<button id="startBtn" disabled>Loading AI model…</button>
+
+<div id="panel">
+  <label>Skin smooth <input id="smooth" type="range" min="0" max="100" value="60"></label>
+  <label>Brighten / glow <input id="glow" type="range" min="0" max="100" value="30"></label>
+  <label>V-shape face <input id="vshape" type="range" min="0" max="100" value="0"></label>
+  <label>Narrow face <input id="narrow" type="range" min="0" max="100" value="0"></label>
+  <button id="compareBtn">Hold to compare (before)</button>
+  <button id="maskBtn">Show mask</button>
+</div>
+
+<script type="module">
+/* ============================================================
+   LEVEL 5 — BEAUTY FILTER (selective skin smoothing)
+
+   Different from all previous demos: we don't draw ON TOP of
+   the video — we REBUILD each frame from processed layers:
+
+   layer 1: the original video frame (sharp)
+   layer 2: a BLURRED copy of the frame
+   layer 3: a MASK = the face oval (from AI landmarks),
+            minus holes for eyes and lips
+
+   Final image = layer 1, with layer 2 painted over it but only
+   where the mask allows, at "smooth" strength. Then a gentle
+   brightness/saturation lift = the "glow".
+
+   Why the holes? Blurred eyes/lips look creepy and fake —
+   real beauty filters ALWAYS keep them sharp.
+   ============================================================ */
+
+import { FaceLandmarker, FilesetResolver }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+const video = document.getElementById('video');
+const out   = document.getElementById('outCanvas');
+const octx  = out.getContext('2d');
+const btn   = document.getElementById('startBtn');
+
+const smoothSlider = document.getElementById('smooth');
+const glowSlider   = document.getElementById('glow');
+const vshapeSlider = document.getElementById('vshape');
+const narrowSlider = document.getElementById('narrow');
+
+/* "hold to compare" — show the unprocessed frame while pressed */
+let comparing = false;
+const cmpBtn = document.getElementById('compareBtn');
+cmpBtn.addEventListener('pointerdown', () => comparing = true);
+cmpBtn.addEventListener('pointerup',   () => comparing = false);
+cmpBtn.addEventListener('pointerleave',() => comparing = false);
+
+let showMask = false;
+document.getElementById('maskBtn').addEventListener('click', e => {
+  showMask = !showMask;
+  e.target.textContent = showMask ? 'Hide mask' : 'Show mask';
+});
+
+/* ---------- offscreen working canvases (video resolution) ---------- */
+const blurCanvas = document.createElement('canvas');
+const maskCanvas = document.createElement('canvas');
+const skinCanvas = document.createElement('canvas');
+const compCanvas = document.createElement('canvas'); // fully composed frame
+const bctx = blurCanvas.getContext('2d');
+const mctx = maskCanvas.getContext('2d');
+const sctx = skinCanvas.getContext('2d');
+const cctx = compCanvas.getContext('2d');
+
+/* ---------- landmark index loops (from MediaPipe docs) ---------- */
+const FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,
+  379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,
+  103,67,109];
+const LEFT_EYE  = [33,246,161,160,159,158,157,173,133,155,154,153,145,144,163,7];
+const RIGHT_EYE = [263,466,388,387,386,385,384,398,362,382,381,380,374,373,390,249];
+const LIPS      = [61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,181,91,146];
+
+/* ---------- load model ---------- */
+const filesets = await FilesetResolver.forVisionTasks(
+  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+);
+async function createLandmarker(delegate) {
+  return FaceLandmarker.createFromOptions(filesets, {
+    baseOptions: {
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+      delegate
+    },
+    runningMode: "VIDEO",
+    numFaces: 2
+  });
+}
+let landmarker;
+try { landmarker = await createLandmarker("GPU"); }
+catch { landmarker = await createLandmarker("CPU"); }
+
+btn.disabled = false;
+btn.textContent = "Start beauty filter ✨";
+
+btn.addEventListener('click', async () => {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: 1280, height: 720 }
+  });
+  video.srcObject = stream;
+  await video.play();
+
+  // size all working canvases to the real video resolution
+  for (const c of [blurCanvas, maskCanvas, skinCanvas, compCanvas]) {
+    c.width = video.videoWidth; c.height = video.videoHeight;
+  }
+  btn.remove();
+  requestAnimationFrame(loop);
+});
+
+/* ---------- helper: trace a landmark loop as a path ---------- */
+function tracePath(c, landmarks, indices) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  c.beginPath();
+  indices.forEach((idx, i) => {
+    const x = landmarks[idx].x * vw, y = landmarks[idx].y * vh;
+    i === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+  });
+  c.closePath();
+}
+
+/* ---------- build the skin mask for all detected faces ---------- */
+function buildMask(faces) {
+  mctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+
+  for (const landmarks of faces) {
+    // white = smooth here. Soft edge via blur filter on the fill.
+    mctx.filter = 'blur(12px)';           // feathered mask edge
+    mctx.fillStyle = '#fff';
+    tracePath(mctx, landmarks, FACE_OVAL);
+    mctx.fill();
+    mctx.filter = 'none';
+
+    // punch holes: keep eyes & lips sharp
+    mctx.globalCompositeOperation = 'destination-out';
+    mctx.filter = 'blur(4px)';
+    for (const loop of [LEFT_EYE, RIGHT_EYE, LIPS]) {
+      tracePath(mctx, landmarks, loop);
+      mctx.fill();
+    }
+    mctx.filter = 'none';
+    mctx.globalCompositeOperation = 'source-over';
+  }
+}
+
+/* ---------- V-SHAPE jaw warp ----------
+   Technique: "slice and squeeze". We take the jaw region row by
+   row (thin horizontal strips). Each strip is redrawn in three
+   pieces:
+     [outside][ FACE ][outside]
+   The FACE piece is squeezed narrower toward the centerline;
+   the two outside pieces are stretched slightly to fill the gap
+   (otherwise you'd see seams). Squeeze = 0 at cheekbone level,
+   maximum at the chin → jaw becomes a "V".
+
+   Landmarks used: 234 = left cheek edge, 454 = right cheek edge,
+   152 = chin tip, 10 = top of forehead.
+
+   TWO reshape effects share this machinery — they just have
+   different "squeeze profiles" along the face height:
+   - V-SHAPE: 0 at cheekbones → max at chin  (jaw only)
+   - NARROW:  even squeeze from forehead to chin, feathered
+              at the top and bottom so it blends invisibly */
+function warpJaw(landmarks, vStrength, nStrength, scale, dx, dy) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const P = i => ({ x: landmarks[i].x * vw, y: landmarks[i].y * vh });
+  const cheekL = P(234), cheekR = P(454), chin = P(152), top = P(10);
+
+  const faceW = cheekR.x - cheekL.x;
+  if (faceW < 10) return;
+  const cheekY = Math.min(cheekL.y, cheekR.y);
+  const yTop = top.y - (chin.y - top.y) * 0.10;       // just above forehead
+  const y0 = nStrength > 0 ? yTop : cheekY;           // narrow starts higher
+  const y1 = chin.y + (chin.y - cheekY) * 0.18;       // fade out below chin
+  const stripH = 4;                                    // strip height (video px)
+
+  for (let y = y0; y < y1; y += stripH) {
+    /* V-shape profile: 0 above cheeks, grows toward chin, fades below */
+    let vCurve = 0;
+    if (y >= cheekY) {
+      const t = Math.min((y - cheekY) / (chin.y - cheekY), 1);
+      vCurve = y <= chin.y
+        ? Math.pow(t, 1.4)
+        : Math.max(0, 1 - (y - chin.y) / (y1 - chin.y));
+    }
+
+    /* Narrow profile: flat 1.0 across the face, feathered ends */
+    let nCurve = 0;
+    if (nStrength > 0) {
+      const total = y1 - yTop;
+      const u = (y - yTop) / total;                   // 0..1 down the face
+      nCurve = Math.min(u / 0.15, 1) * Math.min((1 - u) / 0.15, 1);
+      nCurve = Math.max(0, Math.min(1, nCurve));
+    }
+
+    const inset = (vStrength * 0.055 * vCurve + nStrength * 0.04 * nCurve) * faceW;
+    if (inset < 0.4) continue;
+
+    // approximate face edges at this row
+    const tJaw = Math.max(0, Math.min((y - cheekY) / (chin.y - cheekY), 1));
+    const fl = cheekL.x + (chin.x - faceW * 0.28 - cheekL.x) * tJaw;
+    const fr = cheekR.x + (chin.x + faceW * 0.28 - cheekR.x) * tJaw;
+    const pad = faceW * 0.4;                          // stretch zone
+    const wx0 = Math.max(0, fl - pad);
+    const wx1 = Math.min(vw, fr + pad);
+
+    const sx = x => dx + x * scale;                   // video x → screen x
+    const dyy = dy + y * scale;
+    const dhh = stripH * scale + 0.6;                 // tiny overlap, no seams
+
+    // left outside: stretched to fill the freed space
+    octx.drawImage(compCanvas, wx0, y, fl - wx0, stripH,
+      sx(wx0), dyy, (fl + inset - wx0) * scale, dhh);
+    // face: squeezed toward center
+    octx.drawImage(compCanvas, fl, y, fr - fl, stripH,
+      sx(fl + inset), dyy, (fr - fl - 2 * inset) * scale, dhh);
+    // right outside: stretched
+    octx.drawImage(compCanvas, fr, y, wx1 - fr, stripH,
+      sx(fr - inset), dyy, (wx1 - fr + inset) * scale, dhh);
+  }
+}
+
+/* ---------- crash-proof loop ---------- */
+let lastVideoTime = -1;
+let latestFaces = [];
+
+function loop() {
+  if (video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+    try {
+      const result = landmarker.detectForVideo(video, performance.now());
+      latestFaces = result.faceLandmarks || [];
+    } catch (err) {
+      console.warn('detection skipped:', err);
+    }
+  }
+
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw) { requestAnimationFrame(loop); return; }
+
+  // match output canvas to screen (with cover crop)
+  out.width  = window.innerWidth;
+  out.height = window.innerHeight;
+  const scale = Math.max(out.width / vw, out.height / vh);
+  const dx = (out.width  - vw * scale) / 2;
+  const dy = (out.height - vh * scale) / 2;
+
+  const smooth = comparing ? 0 : smoothSlider.value / 100;
+  const glow   = comparing ? 0 : glowSlider.value / 100;
+  const vshape = comparing ? 0 : vshapeSlider.value / 100;
+  const narrow = comparing ? 0 : narrowSlider.value / 100;
+
+  /* layer 2: blurred copy of this frame */
+  bctx.filter = 'blur(7px)';
+  bctx.drawImage(video, 0, 0, vw, vh);
+  bctx.filter = 'none';
+
+  /* layer 3: skin mask from AI landmarks */
+  buildMask(latestFaces);
+
+  /* combine: blurred frame, kept only where mask is white */
+  sctx.clearRect(0, 0, vw, vh);
+  sctx.drawImage(blurCanvas, 0, 0);
+  sctx.globalCompositeOperation = 'destination-in';
+  sctx.drawImage(maskCanvas, 0, 0);
+  sctx.globalCompositeOperation = 'source-over';
+
+  /* compose the finished (flat) frame at video resolution:
+     sharp base + glow + smoothed skin on top */
+  cctx.filter = glow > 0
+    ? `brightness(${1 + glow * 0.12}) saturate(${1 + glow * 0.15}) contrast(${1 - glow * 0.05})`
+    : 'none';
+  cctx.drawImage(video, 0, 0, vw, vh);
+  cctx.filter = 'none';
+  cctx.globalAlpha = smooth * 0.85;
+  cctx.drawImage(skinCanvas, 0, 0);
+  cctx.globalAlpha = 1;
+
+  /* draw composed frame to screen */
+  octx.drawImage(compCanvas, dx, dy, vw * scale, vh * scale);
+
+  /* RESHAPE: overdraw the face region as squeezed strips */
+  if (vshape > 0 || narrow > 0) {
+    for (const landmarks of latestFaces) {
+      warpJaw(landmarks, vshape, narrow, scale, dx, dy);
+    }
+  }
+
+  /* educational: visualize the mask */
+  if (showMask) {
+    octx.globalAlpha = 0.5;
+    octx.fillStyle = '#e84393';
+    octx.drawImage(maskCanvas, dx, dy, vw * scale, vh * scale);
+    octx.globalAlpha = 1;
+  }
+
+  requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>

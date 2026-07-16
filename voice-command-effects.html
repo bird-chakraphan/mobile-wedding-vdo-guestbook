@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voice Command Effects — Learning Demo (Level 4)</title>
+<style>
+  body { margin: 0; background: #0a0a14; overflow: hidden; font-family: sans-serif; color: #fff; }
+
+  #fxCanvas { position: absolute; top: 0; left: 0; z-index: 1; }
+
+  #startBtn {
+    position: absolute; z-index: 10;
+    top: 50%; left: 50%; transform: translate(-50%,-50%);
+    padding: 16px 32px; font-size: 18px; border-radius: 30px;
+    border: none; background: #f5a623; color: #000; cursor: pointer;
+  }
+
+  /* live transcript bar */
+  #transcriptBox {
+    position: absolute; z-index: 5; bottom: 30px; left: 50%;
+    transform: translateX(-50%);
+    width: min(80vw, 700px);
+    background: rgba(0,0,0,.6); backdrop-filter: blur(8px);
+    border-radius: 14px; padding: 14px 20px;
+    font-size: 18px; line-height: 1.5; min-height: 28px;
+  }
+  #transcriptBox .final   { color: #fff; }
+  #transcriptBox .interim { color: rgba(255,255,255,.45); font-style: italic; }
+  #transcriptBox .hit     { color: #f5a623; font-weight: bold; }
+
+  /* command hint chips */
+  #hints {
+    position: absolute; z-index: 5; top: 20px; width: 100%;
+    text-align: center; font-size: 14px;
+  }
+  #hints span {
+    display: inline-block; margin: 0 6px; padding: 6px 14px;
+    background: rgba(255,255,255,.1); border-radius: 20px;
+  }
+  #hints b { color: #f5a623; }
+
+  #langBar { position: absolute; z-index: 5; top: 64px; width: 100%; text-align: center; }
+  #langBar button {
+    margin: 0 4px; padding: 6px 16px; border-radius: 16px; border: none;
+    background: rgba(255,255,255,.12); color: #fff; cursor: pointer; font-size: 13px;
+  }
+  #langBar button.on { background: #f5a623; color: #000; }
+</style>
+</head>
+<body>
+
+<canvas id="fxCanvas"></canvas>
+<button id="startBtn">Start listening 🎤</button>
+
+<div id="hints">
+  <span>Say <b>fire</b> 🎆</span>
+  <span>Say <b>snow</b> ❄️</span>
+  <span>Say <b>bubble</b> 🫧</span>
+  <span>Say <b>clear</b> 🧹</span>
+</div>
+<div id="langBar">
+  <button id="langEn" class="on">English</button>
+  <button id="langTh">ไทย</button>
+</div>
+<div id="transcriptBox"><span class="interim">…your words will appear here…</span></div>
+
+<script>
+/* ============================================================
+   LEVEL 4 — SPEECH-TO-TEXT (Web Speech API)
+
+   The browser has speech recognition BUILT IN — no library,
+   no key. Note: Chrome sends the audio to Google's servers
+   for processing, so it needs internet & isn't fully private.
+
+   How it works:
+   1. new SpeechRecognition() + .start() → mic begins listening
+   2. It fires "result" events with two kinds of text:
+        - INTERIM: its live guess while you're mid-sentence
+          (shown in gray italics — watch it change its mind!)
+        - FINAL: the confirmed text once you pause
+   3. We scan the text for trigger words → spawn effects.
+   ============================================================ */
+
+const canvas = document.getElementById('fxCanvas');
+const ctx    = canvas.getContext('2d');
+const box    = document.getElementById('transcriptBox');
+const btn    = document.getElementById('startBtn');
+
+function resize() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---------- trigger words per language ---------- */
+const TRIGGERS = {
+  'en-US': { fire: 'firework', snow: 'snow', bubble: 'bubble', clear: 'clear' },
+  'th-TH': { 'ไฟ': 'firework', 'หิมะ': 'snow', 'ฟอง': 'bubble', 'ลบ': 'clear' }
+};
+let lang = 'en-US';
+
+/* ---------- language toggle ---------- */
+const enBtn = document.getElementById('langEn');
+const thBtn = document.getElementById('langTh');
+enBtn.onclick = () => setLang('en-US');
+thBtn.onclick = () => setLang('th-TH');
+function setLang(l) {
+  lang = l;
+  enBtn.classList.toggle('on', l === 'en-US');
+  thBtn.classList.toggle('on', l === 'th-TH');
+  document.getElementById('hints').innerHTML = l === 'en-US'
+    ? '<span>Say <b>fire</b> 🎆</span><span>Say <b>snow</b> ❄️</span><span>Say <b>bubble</b> 🫧</span><span>Say <b>clear</b> 🧹</span>'
+    : '<span>พูด <b>ไฟ</b> 🎆</span><span>พูด <b>หิมะ</b> ❄️</span><span>พูด <b>ฟอง</b> 🫧</span><span>พูด <b>ลบ</b> 🧹</span>';
+  if (recognition) { recognition.stop(); } // restarts with new lang (see onend)
+}
+
+/* ---------- set up recognition ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let listening = false;
+
+btn.addEventListener('click', () => {
+  if (!SR) {
+    box.innerHTML = '<span class="final">This browser has no Web Speech API — try Chrome.</span>';
+    return;
+  }
+  btn.remove();
+  listening = true;
+  startRecognition();
+  requestAnimationFrame(loop);
+});
+
+function startRecognition() {
+  recognition = new SR();
+  recognition.lang = lang;
+  recognition.continuous = true;      // keep listening
+  recognition.interimResults = true;  // show live guesses too
+
+  recognition.onresult = (event) => {
+    let interim = '', final = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const text = event.results[i][0].transcript;
+      if (event.results[i].isFinal) final += text;
+      else interim += text;
+    }
+    showTranscript(final, interim);
+    checkTriggers(final || interim);
+  };
+
+  // Chrome stops recognition after silence — restart automatically
+  recognition.onend = () => { if (listening) startRecognition(); };
+  recognition.onerror = (e) => console.warn('speech error:', e.error);
+
+  recognition.start();
+}
+
+/* ---------- transcript display (with trigger words highlighted) ---------- */
+function highlight(text) {
+  let out = text;
+  for (const word of Object.keys(TRIGGERS[lang])) {
+    out = out.replaceAll(word, `<span class="hit">${word}</span>`);
+  }
+  return out;
+}
+function showTranscript(final, interim) {
+  box.innerHTML =
+    `<span class="final">${highlight(final)}</span>` +
+    `<span class="interim">${highlight(interim)}</span>`;
+}
+
+/* ---------- trigger detection (with cooldown per word) ---------- */
+const lastFired = {};
+function checkTriggers(text) {
+  const lower = text.toLowerCase();
+  for (const [word, effect] of Object.entries(TRIGGERS[lang])) {
+    if (lower.includes(word)) {
+      const now = Date.now();
+      if (!lastFired[word] || now - lastFired[word] > 2000) { // 2s cooldown
+        lastFired[word] = now;
+        spawn(effect);
+      }
+    }
+  }
+}
+
+/* ---------- the effects ---------- */
+let particles = [];
+
+function spawn(effect) {
+  if (effect === 'clear') { particles = []; return; }
+
+  if (effect === 'firework') {
+    const cx = canvas.width * (0.2 + Math.random() * 0.6);
+    const cy = canvas.height * (0.2 + Math.random() * 0.4);
+    const color = `hsl(${Math.random() * 360}, 100%, 60%)`;
+    for (let i = 0; i < 80; i++) {
+      const a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 5;
+      particles.push({ type: 'spark', x: cx, y: cy,
+        vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, color });
+    }
+  }
+  if (effect === 'snow') {
+    for (let i = 0; i < 60; i++) {
+      particles.push({ type: 'snow',
+        x: Math.random() * canvas.width, y: -20 - Math.random() * 200,
+        vx: (Math.random() - .5) * 0.6, vy: 1 + Math.random() * 1.5,
+        life: 1, size: 2 + Math.random() * 4 });
+    }
+  }
+  if (effect === 'bubble') {
+    for (let i = 0; i < 25; i++) {
+      particles.push({ type: 'bubble',
+        x: Math.random() * canvas.width, y: canvas.height + 20,
+        vx: (Math.random() - .5) * 1, vy: -(1 + Math.random() * 2),
+        life: 1, size: 8 + Math.random() * 18 });
+    }
+  }
+}
+
+function loop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  particles = particles.filter(p => p.life > 0 &&
+    p.y < canvas.height + 40 && p.y > -60);
+
+  for (const p of particles) {
+    p.x += p.vx; p.y += p.vy;
+
+    if (p.type === 'spark') {
+      p.vy += 0.06;          // gravity pulls sparks down
+      p.life -= 0.012;
+      if (p.life <= 0) continue;          // never draw negative sizes!
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, Math.max(0, 2.5 * p.life), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (p.type === 'snow') {
+      p.x += Math.sin(p.y * 0.02) * 0.5;  // drift side to side
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (p.type === 'bubble') {
+      ctx.globalAlpha = 0.8;
+      ctx.strokeStyle = 'rgba(150,220,255,0.9)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+  requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>

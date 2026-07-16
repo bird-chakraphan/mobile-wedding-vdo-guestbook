@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Face Tracking — Learning Demo (Level 3)</title>
+<style>
+  body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+
+  #video, #fxCanvas {
+    position: absolute; top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    object-fit: cover;
+    transform: scaleX(-1); /* selfie mirror */
+  }
+  #fxCanvas { z-index: 2; }
+
+  #startBtn {
+    position: absolute; z-index: 10;
+    top: 50%; left: 50%; transform: translate(-50%,-50%);
+    padding: 16px 32px; font-size: 18px; border-radius: 30px;
+    border: none; background: #00b894; color: #fff; cursor: pointer;
+  }
+
+  /* live expression meter panel */
+  #panel {
+    position: absolute; z-index: 5; top: 16px; left: 16px;
+    background: rgba(0,0,0,.55); border-radius: 12px;
+    padding: 12px 16px; color: #fff; font-size: 13px;
+    min-width: 230px; backdrop-filter: blur(6px);
+  }
+  .meter { margin: 6px 0; }
+  .meter .label { display: flex; justify-content: space-between; margin-bottom: 2px; }
+  .meter .bar   { height: 8px; background: rgba(255,255,255,.15); border-radius: 4px; overflow: hidden; }
+  .meter .fill  { height: 100%; width: 0%; background: #00e0a4; border-radius: 4px; }
+  .meter.active .fill { background: #ff3d6e; }
+
+  /* big emoji reaction */
+  #emoji {
+    position: absolute; z-index: 5; top: 20px; right: 30px;
+    font-size: 80px; transition: transform .15s;
+  }
+</style>
+</head>
+<body>
+
+<video id="video" autoplay playsinline muted></video>
+<canvas id="fxCanvas"></canvas>
+<button id="startBtn" disabled>Loading AI model…</button>
+
+<div id="panel">
+  <b>Live expression scores (0–100)</b>
+  <div id="meters"></div>
+</div>
+
+<script type="module">
+/* ============================================================
+   LEVEL 3 — FACE TRACKING
+
+   Face Landmarker returns two things per frame:
+
+   1. LANDMARKS: 478 (x,y) points covering the whole face.
+      We draw them as a dot mesh so you can see the tracking.
+
+   2. BLENDSHAPES: 52 expression scores, each 0..1, with
+      human-readable names like "jawOpen", "eyeBlinkLeft".
+      Google pre-trained these — you just read the numbers.
+      Effect logic becomes simple IF statements:
+         if (jawOpen > 0.5) → mouth is open!
+   ============================================================ */
+
+import { FaceLandmarker, FilesetResolver }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+const video  = document.getElementById('video');
+const canvas = document.getElementById('fxCanvas');
+const ctx    = canvas.getContext('2d');
+const btn    = document.getElementById('startBtn');
+
+function resize() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---------- load model (GPU, fall back to CPU) ---------- */
+const filesets = await FilesetResolver.forVisionTasks(
+  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+);
+async function createLandmarker(delegate) {
+  return FaceLandmarker.createFromOptions(filesets, {
+    baseOptions: {
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+      delegate
+    },
+    runningMode: "VIDEO",
+    numFaces: 2,                  // ← that's all it takes!
+    outputFaceBlendshapes: true   // ← ask for the 52 expression scores
+  });
+}
+let landmarker;
+try { landmarker = await createLandmarker("GPU"); }
+catch { landmarker = await createLandmarker("CPU"); }
+
+btn.disabled = false;
+btn.textContent = "Start face tracking 😃";
+
+btn.addEventListener('click', async () => {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: 1280, height: 720 }
+  });
+  video.srcObject = stream;
+  await video.play();
+  btn.remove();
+  requestAnimationFrame(loop);
+});
+
+/* ---------- video → screen mapping (same as Level 2) ---------- */
+function toScreen(lm) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const cw = canvas.width,     ch = canvas.height;
+  const scale = Math.max(cw / vw, ch / vh);
+  return {
+    x: lm.x * vw * scale + (cw - vw * scale) / 2,
+    y: lm.y * vh * scale + (ch - vh * scale) / 2
+  };
+}
+
+/* ---------- the expression meters we display ---------- */
+const WATCHED = [
+  { key: 'jawOpen',        label: '😮 Mouth open (jawOpen)' },
+  { key: 'eyeBlinkLeft',   label: '😉 Left eye close' },
+  { key: 'eyeBlinkRight',  label: '😉 Right eye close' },
+  { key: 'mouthSmileLeft', label: '😄 Smile' },
+  { key: 'browInnerUp',    label: '🤨 Eyebrows up' },
+  { key: 'mouthPucker',    label: '😗 Pucker (kiss)' },
+];
+
+// build the meter UI
+const metersDiv = document.getElementById('meters');
+const meterEls = {};
+for (const w of WATCHED) {
+  const el = document.createElement('div');
+  el.className = 'meter';
+  el.innerHTML = `
+    <div class="label"><span>${w.label}</span><span class="val">0</span></div>
+    <div class="bar"><div class="fill"></div></div>`;
+  metersDiv.appendChild(el);
+  meterEls[w.key] = el;
+}
+
+function updateMeters(scores) {
+  for (const w of WATCHED) {
+    const v = scores[w.key] || 0;
+    const el = meterEls[w.key];
+    el.querySelector('.fill').style.width = (v * 100) + '%';
+    el.querySelector('.val').textContent = Math.round(v * 100);
+    el.classList.toggle('active', v > 0.5); // highlight when "triggered"
+  }
+}
+
+/* ---------- turn scores into an emoji reaction ---------- */
+function pickEmoji(s) {
+  const bothEyes = (s.eyeBlinkLeft > .5) && (s.eyeBlinkRight > .5);
+  const oneEye   = (s.eyeBlinkLeft > .5) !== (s.eyeBlinkRight > .5);
+  if (s.jawOpen > .6)               return '😱';
+  if (bothEyes)                     return '😴';
+  if (oneEye)                       return '😉';
+  if (s.mouthPucker > .6)           return '😗';
+  if (s.mouthSmileLeft > .5)        return '😄';
+  if (s.browInnerUp > .6)           return '🤨';
+  return '🙂';
+}
+
+/* ---------- draw the 478-point mesh (color per face) ---------- */
+const FACE_COLORS = ['rgba(0,224,164,0.6)', 'rgba(255,61,110,0.6)'];
+
+function drawMesh(landmarks, faceIndex) {
+  ctx.fillStyle = FACE_COLORS[faceIndex % FACE_COLORS.length];
+  for (const lm of landmarks) {
+    const p = toScreen(lm);
+    ctx.fillRect(p.x - 1, p.y - 1, 2, 2); // tiny square per point (fast)
+  }
+}
+
+/* ---------- draw an emoji floating above a face ----------
+   Landmark #10 is the top of the forehead. Canvas is mirrored
+   by CSS, but text would come out backwards — so we un-mirror
+   just for the emoji with save/scale(-1,1)/restore. */
+function drawFaceEmoji(landmarks, emojiChar) {
+  const forehead = toScreen(landmarks[10]);
+  ctx.save();
+  ctx.translate(forehead.x, forehead.y - 60);
+  ctx.scale(-1, 1);                 // cancel the CSS mirror for text
+  ctx.font = '64px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText(emojiChar, 0, 0);
+  ctx.restore();
+}
+
+/* ---------- crash-proof loop (Level 2 lessons applied) ---------- */
+let lastVideoTime = -1;
+let latestFaces = [];      // array of { landmarks, scores }
+
+function loop() {
+  if (video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+    try {
+      const result = landmarker.detectForVideo(video, performance.now());
+      latestFaces = (result.faceLandmarks || []).map((landmarks, i) => {
+        // blendshapes arrive as a list; convert to {name: score} object
+        const scores = {};
+        for (const c of result.faceBlendshapes[i].categories) {
+          scores[c.categoryName] = c.score;
+        }
+        return { landmarks, scores };
+      });
+    } catch (err) {
+      console.warn('detection skipped:', err);
+    }
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  latestFaces.forEach((face, i) => {
+    drawMesh(face.landmarks, i);
+    drawFaceEmoji(face.landmarks, pickEmoji(face.scores));
+    if (i === 0) updateMeters(face.scores); // meter panel shows face #1
+  });
+  requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Hand Tracking Laser — Learning Demo (Level 2, fixed)</title>
+<style>
+  body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+
+  #video, #fxCanvas {
+    position: absolute; top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    object-fit: cover;
+    transform: scaleX(-1); /* mirror like a selfie */
+  }
+  #fxCanvas { z-index: 2; }
+
+  #startBtn {
+    position: absolute; z-index: 10;
+    top: 50%; left: 50%; transform: translate(-50%,-50%);
+    padding: 16px 32px; font-size: 18px; border-radius: 30px;
+    border: none; background: #ff3d6e; color: #fff; cursor: pointer;
+  }
+  #status {
+    position: absolute; z-index: 5; top: 16px; width: 100%;
+    text-align: center; color: rgba(255,255,255,.8); font-size: 14px;
+    text-shadow: 0 1px 3px #000;
+  }
+</style>
+</head>
+<body>
+
+<video id="video" autoplay playsinline muted></video>
+<canvas id="fxCanvas"></canvas>
+<button id="startBtn" disabled>Loading AI model…</button>
+<div id="status"></div>
+
+<script type="module">
+/* ============================================================
+   LEVEL 2 (FIXED) — HAND TRACKING
+
+   Fix 1 (freezing): now uses MediaPipe "tasks-vision", Google's
+   current, maintained hand tracker. We also drive it with our
+   own requestAnimationFrame loop — one frame in, one result out,
+   so it can't jam like the old callback-based version.
+
+   Fix 2 (skeleton offset): the video fills your screen with
+   object-fit:cover, which CROPS the edges. Landmarks come in
+   video coordinates, so we must apply the same crop math when
+   converting to screen pixels — see toScreen().
+   ============================================================ */
+
+import { HandLandmarker, FilesetResolver }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+const video  = document.getElementById('video');
+const canvas = document.getElementById('fxCanvas');
+const ctx    = canvas.getContext('2d');
+const btn    = document.getElementById('startBtn');
+const status = document.getElementById('status');
+
+function resize() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---------- load the AI model ---------- */
+const filesets = await FilesetResolver.forVisionTasks(
+  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+);
+// Try GPU first (fast); if the graphics driver rejects it, fall
+// back to CPU (slower but bulletproof).
+async function createLandmarker(delegate) {
+  return HandLandmarker.createFromOptions(filesets, {
+    baseOptions: {
+      modelAssetPath:
+        "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+      delegate
+    },
+    runningMode: "VIDEO",
+    numHands: 2
+  });
+}
+let landmarker;
+try {
+  landmarker = await createLandmarker("GPU");
+} catch {
+  landmarker = await createLandmarker("CPU");
+}
+btn.disabled = false;
+btn.textContent = "Start hand tracking 🖐️";
+
+/* ---------- start camera ---------- */
+btn.addEventListener('click', async () => {
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video: { width: 1280, height: 720 }
+  });
+  video.srcObject = stream;
+  await video.play();
+  btn.remove();
+  requestAnimationFrame(loop);
+});
+
+/* ---------- FIX 2: correct video → screen mapping ----------
+   object-fit:cover scales the video so it FILLS the screen,
+   cropping whatever sticks out. We redo that same math here:
+   scale = the bigger of (screen/video) ratios, then center. */
+function toScreen(lm) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  const cw = canvas.width,     ch = canvas.height;
+  const scale = Math.max(cw / vw, ch / vh);
+  const offsetX = (cw - vw * scale) / 2;  // negative = cropped
+  const offsetY = (ch - vh * scale) / 2;
+  return {
+    x: lm.x * vw * scale + offsetX,
+    y: lm.y * vh * scale + offsetY
+  };
+}
+
+/* ---------- skeleton drawing (the visible tracking) ---------- */
+const BONES = [
+  [0,1],[1,2],[2,3],[3,4],        // thumb
+  [0,5],[5,6],[6,7],[7,8],        // index finger
+  [0,9],[9,10],[10,11],[11,12],   // middle finger
+  [0,13],[13,14],[14,15],[15,16], // ring finger
+  [0,17],[17,18],[18,19],[19,20]  // pinky
+];
+
+function drawSkeleton(landmarks) {
+  ctx.strokeStyle = 'rgba(0,255,200,0.9)';
+  ctx.lineWidth = 2;
+  for (const [a, b] of BONES) {
+    const p1 = toScreen(landmarks[a]);
+    const p2 = toScreen(landmarks[b]);
+    ctx.beginPath();
+    ctx.moveTo(p1.x, p1.y);
+    ctx.lineTo(p2.x, p2.y);
+    ctx.stroke();
+  }
+  for (let i = 0; i < landmarks.length; i++) {
+    const p = toScreen(landmarks[i]);
+    ctx.fillStyle = i === 8 ? '#ff3d6e' : '#00ffc8'; // #8 fingertip = pink
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, i === 8 ? 7 : 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.font = '10px sans-serif';
+    ctx.fillText(i, p.x + 6, p.y - 6);
+  }
+}
+
+/* ---------- laser + sparks ---------- */
+let sparks = [];
+
+function drawLaser(landmarks) {
+  const tip     = toScreen(landmarks[8]); // index fingertip
+  const knuckle = toScreen(landmarks[5]); // base of index finger
+
+  const dx = tip.x - knuckle.x, dy = tip.y - knuckle.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const end = { x: tip.x + (dx/len) * 2000, y: tip.y + (dy/len) * 2000 };
+
+  const beams = [
+    { w: 14, c: 'rgba(255,61,110,0.15)' },
+    { w: 6,  c: 'rgba(255,61,110,0.5)'  },
+    { w: 2,  c: 'rgba(255,255,255,0.95)'}
+  ];
+  for (const b of beams) {
+    ctx.strokeStyle = b.c;
+    ctx.lineWidth = b.w;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(tip.x, tip.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+  }
+
+  for (let i = 0; i < 2; i++) {
+    sparks.push({
+      x: tip.x, y: tip.y,
+      vx: (Math.random() - .5) * 6,
+      vy: (Math.random() - .5) * 6,
+      life: 1
+    });
+  }
+}
+
+function updateAndDrawSparks() {
+  sparks = sparks.filter(s => s.life > 0);
+  for (const s of sparks) {
+    s.x += s.vx; s.y += s.vy; s.life -= 0.04;
+    if (s.life <= 0) continue;          // THE BUG: life could go negative
+    ctx.fillStyle = `rgba(255,200,100,${s.life})`;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, Math.max(0, 3 * s.life), 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/* ---------- FIX 3: crash-proof loop ----------
+   Lesson from the last bug: ONE error inside loop() kills the
+   whole requestAnimationFrame chain — the screen just freezes,
+   silently. So now:
+   a) detection is wrapped in try/catch — a bad frame is skipped,
+      the loop keeps running;
+   b) we REMEMBER the latest hands and redraw them every screen
+      frame (your screen may run at 120fps but the camera at 30fps
+      — drawing only on new camera frames caused flicker/vanish). */
+let lastVideoTime = -1;
+let latestHands = [];   // remembered results — drawn every frame
+
+function loop() {
+  // analyze only when the camera has a NEW frame
+  if (video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+    try {
+      const result = landmarker.detectForVideo(video, performance.now());
+      latestHands = result.landmarks || [];
+      status.textContent = latestHands.length
+        ? `Tracking ${latestHands.length} hand(s) — point your index finger!`
+        : 'Show your hand to the camera 🖐️';
+    } catch (err) {
+      // skip this frame, keep the loop alive
+      console.warn('detection skipped:', err);
+    }
+  }
+
+  // draw EVERY screen frame, from the remembered results
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const landmarks of latestHands) {
+    drawSkeleton(landmarks);
+    drawLaser(landmarks);
+  }
+  updateAndDrawSparks();
+  requestAnimationFrame(loop);
+}
+</script>
+</body>
+</html>

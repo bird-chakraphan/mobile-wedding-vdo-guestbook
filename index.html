@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wedding VDO Guest Book</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: sans-serif; }
+
+  /* video stays hidden — we show the PROCESSED canvas instead (same
+     approach as beauty-filter-camera.html) */
+  #video { display: none; }
+
+  #outCanvas {
+    position: absolute; top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    transform: scaleX(-1); /* selfie mirror */
+  }
+
+  #startBtn {
+    position: absolute; z-index: 10;
+    top: 50%; left: 50%; transform: translate(-50%,-50%);
+    padding: 16px 32px; font-size: 18px; border-radius: 30px;
+    border: none; background: #e84393; color: #fff; cursor: pointer;
+  }
+
+  #status {
+    position: absolute; z-index: 5; top: 16px; width: 100%;
+    text-align: center; color: rgba(255,255,255,.85); font-size: 14px;
+    text-shadow: 0 1px 3px #000; padding: 0 12px; box-sizing: border-box;
+  }
+
+  #controls {
+    position: absolute; z-index: 5; bottom: 24px; left: 50%;
+    transform: translateX(-50%);
+    display: none; gap: 16px;
+  }
+  #controls button {
+    padding: 14px 28px; font-size: 16px; border-radius: 30px;
+    border: none; color: #fff; cursor: pointer;
+  }
+  #recordBtn { background: #e84393; }
+  #stopBtn { background: #444; display: none; }
+
+  #result {
+    position: absolute; z-index: 20; inset: 0; background: #000;
+    display: none; flex-direction: column; align-items: center;
+    justify-content: center; gap: 16px;
+  }
+  #result video { max-width: 92vw; max-height: 65vh; }
+  #uploadStatus { color: #fff; font-size: 14px; }
+  #result a, #result button {
+    padding: 12px 26px; border-radius: 24px; border: none;
+    background: #e84393; color: #fff; text-decoration: none;
+    font-size: 15px; cursor: pointer;
+  }
+  #retryBtn { background: #444; }
+</style>
+</head>
+<body>
+
+<video id="video" autoplay playsinline muted></video>
+<canvas id="outCanvas"></canvas>
+<button id="startBtn" disabled>Loading AI models…</button>
+<div id="status"></div>
+
+<div id="controls">
+  <button id="recordBtn">● Record</button>
+  <button id="stopBtn">■ Stop</button>
+</div>
+
+<div id="result">
+  <video id="previewVideo" controls playsinline></video>
+  <div id="uploadStatus"></div>
+  <a id="downloadLink" download>Download clip</a>
+  <button id="retryBtn">Record again</button>
+</div>
+
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
