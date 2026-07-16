@@ -2,14 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { pickMimeType, buildFilename, withRetries, MIME_CANDIDATES } from './recording.js';
 
 describe('pickMimeType', () => {
-  it('prefers vp9 when the browser supports it', () => {
-    const isSupported = (type) => type === 'video/webm;codecs=vp9,opus';
-    expect(pickMimeType(isSupported, MIME_CANDIDATES)).toBe('video/webm;codecs=vp9,opus');
+  it('prefers mp4 (H.264) over webm whenever the device can record it — mp4 is the only format phone photo galleries accept', () => {
+    const isSupported = (type) => type.startsWith('video/mp4') || type.startsWith('video/webm');
+    expect(pickMimeType(isSupported, MIME_CANDIDATES)).toMatch(/^video\/mp4/);
   });
 
-  it('falls back to mp4 for iOS Safari, which only supports mp4', () => {
-    const isSupported = (type) => type === 'video/mp4';
-    expect(pickMimeType(isSupported, MIME_CANDIDATES)).toBe('video/mp4');
+  it('falls back to webm when the browser cannot record mp4', () => {
+    const isSupported = (type) => type.startsWith('video/webm');
+    expect(pickMimeType(isSupported, MIME_CANDIDATES)).toMatch(/^video\/webm/);
   });
 
   it('returns empty string when nothing in the list is supported', () => {

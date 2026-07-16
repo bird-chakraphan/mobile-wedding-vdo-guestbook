@@ -50,6 +50,7 @@ const stopBtn = document.getElementById('stopBtn');
 const result = document.getElementById('result');
 const previewVideo = document.getElementById('previewVideo');
 const uploadStatus = document.getElementById('uploadStatus');
+const saveBtn = document.getElementById('saveBtn');
 const downloadLink = document.getElementById('downloadLink');
 const retryBtn = document.getElementById('retryBtn');
 
@@ -436,11 +437,32 @@ function onRecordingStop() {
   uploadStatus.textContent = 'Uploading to the couple’s gallery…';
   result.style.display = 'flex';
 
+  setupSaveToPhotos(blob, filename);
+
   controls.style.display = 'none';
   recordBtn.style.display = 'inline-block';
   stopBtn.style.display = 'none';
 
   uploadClip(blob, filename);
+}
+
+// "Save to Photos" via the Web Share API: the native share sheet has
+// "Save Video" (iOS) / gallery targets (Android). Only mp4 clips are
+// accepted by photo galleries — with webm, the button stays hidden and
+// the plain download link remains the only option.
+function setupSaveToPhotos(blob, filename) {
+  const file = new File([blob], filename, { type: blob.type });
+  const canShare = navigator.canShare && navigator.canShare({ files: [file] });
+  saveBtn.style.display = canShare ? 'inline-block' : 'none';
+  if (!canShare) return;
+  saveBtn.onclick = async () => {
+    try {
+      await navigator.share({ files: [file] });
+    } catch (err) {
+      // guest closing the share sheet is normal — only log real failures
+      if (err.name !== 'AbortError') console.error('share failed:', err);
+    }
+  };
 }
 
 // iOS Safari can fail fetch() uploads whose body is a Blob fresh from
