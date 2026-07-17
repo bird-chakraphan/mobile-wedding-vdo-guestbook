@@ -16,6 +16,7 @@ import { isMiniHeart, majorityHandedness, majorityBoolean } from './gesture.js';
 import { pickMimeType, buildFilename, sanitizeName, withRetries } from './recording.js';
 import { nextHeartState } from './heartAnimation.js';
 import { computeWarpStrips } from './faceWarp.js';
+import { shouldUseGraphicImage } from './gestureGraphic.js';
 import { loadSettings, SETTINGS_DEFAULTS } from './settings.js';
 import { preRollRemaining, recordingStatus } from './countdown.js';
 import { isInAppWebview } from './webview.js';
@@ -145,7 +146,11 @@ if (inWebview) {
   webviewNotice.style.display = 'flex';
   entry.style.display = 'none';
 } else {
-  loadSettings(supabase).then(loaded => { settings = loaded; });
+  loadSettings(supabase).then(loaded => {
+    settings = loaded;
+    loadGestureImage('Left', settings.gestureLeftUrl);
+    loadGestureImage('Right', settings.gestureRightUrl);
+  });
   loadModels().catch(err => {
     console.error('model loading failed:', err);
     startBtn.textContent = 'Loading failed — check internet & reload';
@@ -281,6 +286,23 @@ function drawHandSkeleton(landmarks, vw, vh, cw, ch, matches) {
 const HEART_COLORS = { Right: '#ff3355', Left: '#ff9ecb' };
 const heartsByHand = { Right: null, Left: null };
 
+// Staff-uploaded gesture graphics (issue #7) — preloaded once settings
+// load so a slow/broken image never blocks or glitches the animation.
+// shouldUseGraphicImage (tested, gestureGraphic.js) decides per-frame
+// whether drawHearts() below draws this image or falls back to the
+// built-in heart.
+const gestureImages = { Right: null, Left: null };
+
+function loadGestureImage(label, url) {
+  if (!url) { gestureImages[label] = null; return; }
+  const img = new Image();
+  const state = { url, loaded: false, failed: false, img };
+  img.onload = () => { state.loaded = true; };
+  img.onerror = () => { state.failed = true; };
+  img.src = url;
+  gestureImages[label] = state;
+}
+
 function drawHeartPath(ctx, cx, cy, size) {
   const top = cy + size * 0.28;
   ctx.beginPath();
@@ -296,11 +318,18 @@ function drawHearts() {
   for (const label of ['Right', 'Left']) {
     const h = heartsByHand[label];
     if (!h) continue;
+    const size = Math.max(1, h.size);
+    const graphic = gestureImages[label];
+
     octx.save();
     octx.globalAlpha = h.alpha;
-    octx.fillStyle = HEART_COLORS[label];
-    drawHeartPath(octx, h.x, h.y, Math.max(1, h.size));
-    octx.fill();
+    if (graphic && shouldUseGraphicImage(graphic)) {
+      octx.drawImage(graphic.img, h.x - size / 2, h.y - size / 2, size, size);
+    } else {
+      octx.fillStyle = HEART_COLORS[label];
+      drawHeartPath(octx, h.x, h.y, size);
+      octx.fill();
+    }
     octx.restore();
   }
 }
