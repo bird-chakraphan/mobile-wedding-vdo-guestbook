@@ -10,6 +10,8 @@ export const SETTINGS_DEFAULTS = {
   timeLimitSeconds: 60,
   beautySmooth: 60,
   beautyGlow: 30,
+  beautyVshape: 0,
+  beautyNarrow: 0,
   outputWidth: 1080,
   outputHeight: 1920,
   frameUrl: null,
@@ -18,7 +20,7 @@ export const SETTINGS_DEFAULTS = {
 };
 
 const COLUMNS =
-  'time_limit_seconds,beauty_smooth,beauty_glow,output_width,output_height,frame_url,gesture_left_url,gesture_right_url';
+  'time_limit_seconds,beauty_smooth,beauty_glow,beauty_vshape,beauty_narrow,output_width,output_height,frame_url,gesture_left_url,gesture_right_url';
 
 export async function loadSettings(client, { timeoutMs = 4000 } = {}) {
   try {
@@ -32,6 +34,8 @@ export async function loadSettings(client, { timeoutMs = 4000 } = {}) {
       timeLimitSeconds: data.time_limit_seconds ?? SETTINGS_DEFAULTS.timeLimitSeconds,
       beautySmooth: data.beauty_smooth ?? SETTINGS_DEFAULTS.beautySmooth,
       beautyGlow: data.beauty_glow ?? SETTINGS_DEFAULTS.beautyGlow,
+      beautyVshape: data.beauty_vshape ?? SETTINGS_DEFAULTS.beautyVshape,
+      beautyNarrow: data.beauty_narrow ?? SETTINGS_DEFAULTS.beautyNarrow,
       outputWidth: data.output_width ?? SETTINGS_DEFAULTS.outputWidth,
       outputHeight: data.output_height ?? SETTINGS_DEFAULTS.outputHeight,
       frameUrl: data.frame_url ?? SETTINGS_DEFAULTS.frameUrl,

@@ -15,6 +15,7 @@ import { supabase } from './supabaseClient.js';
 import { isMiniHeart, majorityHandedness, majorityBoolean } from './gesture.js';
 import { pickMimeType, buildFilename, sanitizeName, withRetries } from './recording.js';
 import { nextHeartState } from './heartAnimation.js';
+import { computeWarpStrips } from './faceWarp.js';
 import { loadSettings, SETTINGS_DEFAULTS } from './settings.js';
 import { preRollRemaining, recordingStatus } from './countdown.js';
 import { isInAppWebview } from './webview.js';
@@ -231,6 +232,25 @@ function toScreen(lm, vw, vh, cw, ch) {
   return { x: lm.x * vw * scale + offsetX, y: lm.y * vh * scale + offsetY };
 }
 
+/* ---------- V-shape/narrow face reshape — draws the strips computed by
+   faceWarp.js's computeWarpStrips (pure geometry) onto the screen canvas,
+   sampling from compCanvas (already beauty-composited, video resolution)
+   the same way beauty-filter-camera.html's warpJaw does. ---------- */
+function drawFaceWarp(strips, scale, dx, dy) {
+  for (const { y, height, inset, fl, fr, wx0, wx1 } of strips) {
+    const sx = x => dx + x * scale;
+    const dyy = dy + y * scale;
+    const dhh = height * scale + 0.6; // tiny overlap, no seams
+
+    octx.drawImage(compCanvas, wx0, y, fl - wx0, height,
+      sx(wx0), dyy, (fl + inset - wx0) * scale, dhh);
+    octx.drawImage(compCanvas, fl, y, fr - fl, height,
+      sx(fl + inset), dyy, (fr - fl - 2 * inset) * scale, dhh);
+    octx.drawImage(compCanvas, fr, y, wx1 - fr, height,
+      sx(fr - inset), dyy, (wx1 - fr + inset) * scale, dhh);
+  }
+}
+
 /* ---------- debug skeleton overlay (tuning aid, DEBUG_SKELETON only) —
    same bones/point drawing as hand-laser-camera.html, colored green when
    the current landmarks satisfy isMiniHeart's geometry ---------- */
@@ -359,6 +379,14 @@ function loop() {
   cctx.globalAlpha = 1;
 
   octx.drawImage(compCanvas, dx, dy, vw * scale, vh * scale);
+
+  const vshape = settings.beautyVshape / 100;
+  const narrow = settings.beautyNarrow / 100;
+  if (vshape > 0 || narrow > 0) {
+    for (const landmarks of latestFaces) {
+      drawFaceWarp(computeWarpStrips(landmarks, vshape, narrow, vw, vh), scale, dx, dy);
+    }
+  }
 
   /* gesture detection: mini heart on either hand -> one floating heart
      per hand (right = red, left = pink) */

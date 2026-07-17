@@ -22,6 +22,8 @@ describe('loadSettings', () => {
         time_limit_seconds: 45,
         beauty_smooth: 80,
         beauty_glow: 10,
+        beauty_vshape: 40,
+        beauty_narrow: 25,
         output_width: 720,
         output_height: 1280,
         frame_url: 'https://example.com/frame.png',
@@ -34,6 +36,8 @@ describe('loadSettings', () => {
     expect(settings.timeLimitSeconds).toBe(45);
     expect(settings.beautySmooth).toBe(80);
     expect(settings.beautyGlow).toBe(10);
+    expect(settings.beautyVshape).toBe(40);
+    expect(settings.beautyNarrow).toBe(25);
     expect(settings.outputWidth).toBe(720);
     expect(settings.frameUrl).toBe('https://example.com/frame.png');
     expect(settings.gestureLeftUrl).toBeNull();
@@ -65,5 +69,7 @@ describe('loadSettings', () => {
     const settings = await loadSettings(client);
     expect(settings.timeLimitSeconds).toBe(30);
     expect(settings.beautySmooth).toBe(SETTINGS_DEFAULTS.beautySmooth);
+    expect(settings.beautyVshape).toBe(SETTINGS_DEFAULTS.beautyVshape);
+    expect(settings.beautyNarrow).toBe(SETTINGS_DEFAULTS.beautyNarrow);
   });
 });

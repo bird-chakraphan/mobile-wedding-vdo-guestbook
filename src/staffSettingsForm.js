@@ -9,6 +9,8 @@ export function buildSettingsPayload(passcode, values) {
     p_time_limit_seconds: values.timeLimitSeconds,
     p_beauty_smooth: values.beautySmooth,
     p_beauty_glow: values.beautyGlow,
+    p_beauty_vshape: values.beautyVshape,
+    p_beauty_narrow: values.beautyNarrow,
     p_output_width: values.outputWidth,
     p_output_height: values.outputHeight
   };

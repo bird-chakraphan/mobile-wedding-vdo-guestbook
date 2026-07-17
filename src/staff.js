@@ -12,6 +12,10 @@ const smoothInput = document.getElementById('smoothInput');
 const smoothVal = document.getElementById('smoothVal');
 const glowInput = document.getElementById('glowInput');
 const glowVal = document.getElementById('glowVal');
+const vshapeInput = document.getElementById('vshapeInput');
+const vshapeVal = document.getElementById('vshapeVal');
+const narrowInput = document.getElementById('narrowInput');
+const narrowVal = document.getElementById('narrowVal');
 const presetSelect = document.getElementById('presetSelect');
 const status = document.getElementById('status');
 
@@ -31,11 +35,17 @@ async function populateForm() {
   smoothVal.textContent = settings.beautySmooth;
   glowInput.value = settings.beautyGlow;
   glowVal.textContent = settings.beautyGlow;
+  vshapeInput.value = settings.beautyVshape;
+  vshapeVal.textContent = settings.beautyVshape;
+  narrowInput.value = settings.beautyNarrow;
+  narrowVal.textContent = settings.beautyNarrow;
   presetSelect.value = presetKeyFor(settings.outputWidth, settings.outputHeight);
 }
 
 smoothInput.addEventListener('input', () => { smoothVal.textContent = smoothInput.value; });
 glowInput.addEventListener('input', () => { glowVal.textContent = glowInput.value; });
+vshapeInput.addEventListener('input', () => { vshapeVal.textContent = vshapeInput.value; });
+narrowInput.addEventListener('input', () => { narrowVal.textContent = narrowInput.value; });
 
 unlockBtn.addEventListener('click', async () => {
   passcode = passcodeInput.value;
@@ -53,6 +63,8 @@ form.addEventListener('submit', async (e) => {
     timeLimitSeconds: Number(timeLimitInput.value),
     beautySmooth: Number(smoothInput.value),
     beautyGlow: Number(glowInput.value),
+    beautyVshape: Number(vshapeInput.value),
+    beautyNarrow: Number(narrowInput.value),
     outputWidth: preset.width,
     outputHeight: preset.height
   });

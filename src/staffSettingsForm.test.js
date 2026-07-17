@@ -7,6 +7,8 @@ describe('buildSettingsPayload', () => {
       timeLimitSeconds: 45,
       beautySmooth: 70,
       beautyGlow: 20,
+      beautyVshape: 35,
+      beautyNarrow: 15,
       outputWidth: 720,
       outputHeight: 1280
     });
@@ -15,6 +17,8 @@ describe('buildSettingsPayload', () => {
       p_time_limit_seconds: 45,
       p_beauty_smooth: 70,
       p_beauty_glow: 20,
+      p_beauty_vshape: 35,
+      p_beauty_narrow: 15,
       p_output_width: 720,
       p_output_height: 1280
     });
