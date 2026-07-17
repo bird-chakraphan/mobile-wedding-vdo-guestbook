@@ -349,14 +349,17 @@ function drawHearts() {
     const size = Math.max(1, h.size);
     const graphic = gestureImages[label];
 
+    // (h.x, h.y) is the graphic's bottom centre (gesture.js) — draw upward
+    // from it so the staff size setting grows the graphic without closing
+    // the gap to the hand.
     octx.save();
     octx.globalAlpha = h.alpha;
     if (graphic && shouldUseGraphicImage(graphic)) {
       const { width, height } = aspectFit(size, graphic.img.naturalWidth, graphic.img.naturalHeight);
-      octx.drawImage(graphic.img, h.x - width / 2, h.y - height / 2, width, height);
+      octx.drawImage(graphic.img, h.x - width / 2, h.y - height, width, height);
     } else {
       octx.fillStyle = HEART_COLORS[label];
-      drawHeartPath(octx, h.x, h.y, size);
+      drawHeartPath(octx, h.x, h.y - size, size);
       octx.fill();
     }
     octx.restore();

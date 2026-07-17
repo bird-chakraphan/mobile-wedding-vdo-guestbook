@@ -108,45 +108,55 @@ export function detectGesture(type, landmarks, vw, vh) {
   }
 }
 
-// Where the graphic anchors and its base size, per gesture — all in VIDEO
-// pixels, so the caller maps to screen with its own cover transform (see
-// main.js). Anchor/size chosen to match the reference framing: the box sits
-// over the palm for an open hand, and floats just above the raised
-// fingertip(s) for the pointed gestures. Base size scales with the hand's
-// own wrist->middle-knuckle span, so it tracks distance to the camera; the
-// staff "graphic size" setting multiplies it further.
+// X — the one unit every gesture's graphic is measured in: the index
+// fingertip segment, from the tip (#8) to the first knuckle below it
+// (DIP, #7). It shrinks and grows with distance to the camera, so the
+// graphic tracks the hand automatically.
+export function fingertipUnit(landmarks, vw, vh) {
+  return dist(videoPx(landmarks[8], vw, vh), videoPx(landmarks[7], vw, vh)) || 1;
+}
+
+// At 100%, the graphic fits a 3X by 3X box (aspect preserved by the caller).
+const GRAPHIC_BOX_UNITS = 3;
+
+// Where the graphic sits, per gesture — all in VIDEO pixels, so the caller
+// maps to screen with its own cover transform (see main.js).
+//
+// Returns the graphic's BOTTOM-CENTRE anchor rather than its centre: the
+// size setting then grows the graphic upward while the annotated gap to the
+// hand stays put. Geometry per the reference annotations:
+//   point-up   — bottom sits one X of clear air above the index fingertip.
+//   peace      — take the two raised fingertips: the bottom sits half their
+//                gap above whichever one is higher, centred between them.
+//   mini-heart — same construction, over thumb + index instead.
+//   open-palm  — anchored on the palm centre (not covered by the reference
+//                annotations).
 export function gesturePlacement(type, landmarks, vw, vh) {
-  const wrist = videoPx(landmarks[0], vw, vh);
-  const middleMcp = videoPx(landmarks[9], vw, vh);
-  const handSpan = dist(wrist, middleMcp) || 1;
+  const unit = fingertipUnit(landmarks, vw, vh);
+  const size = unit * GRAPHIC_BOX_UNITS;
 
   if (type === 'open-palm') {
     const ids = [0, 5, 9, 13, 17]; // wrist + the four MCP knuckles = palm
     const cx = ids.reduce((s, i) => s + landmarks[i].x * vw, 0) / ids.length;
     const cy = ids.reduce((s, i) => s + landmarks[i].y * vh, 0) / ids.length;
-    return { x: cx, y: cy, size: handSpan * 1.7 };
+    return { x: cx, y: cy, size };
   }
 
   if (type === 'point-up') {
     const tip = videoPx(landmarks[8], vw, vh);
-    return { x: tip.x, y: tip.y - handSpan * 1.1, size: handSpan * 0.7 };
+    return { x: tip.x, y: tip.y - unit, size };
   }
 
-  if (type === 'peace') {
-    const indexTip = videoPx(landmarks[8], vw, vh);
-    const middleTip = videoPx(landmarks[12], vw, vh);
-    return {
-      x: (indexTip.x + middleTip.x) / 2,
-      y: (indexTip.y + middleTip.y) / 2 - handSpan * 1.1,
-      size: handSpan * 0.7,
-    };
-  }
-
-  // mini-heart: anchor at whichever pinched fingertip sits higher.
-  const thumbTip = videoPx(landmarks[4], vw, vh);
+  // peace and mini-heart share one construction over two raised fingertips —
+  // index + middle for peace, index + thumb for the finger heart.
   const indexTip = videoPx(landmarks[8], vw, vh);
-  const anchor = thumbTip.y < indexTip.y ? thumbTip : indexTip;
-  return { x: anchor.x, y: anchor.y - handSpan * 1.1, size: handSpan * 0.5 };
+  const otherTip = videoPx(landmarks[type === 'peace' ? 12 : 4], vw, vh);
+  const gap = dist(indexTip, otherTip);
+  return {
+    x: (indexTip.x + otherTip.x) / 2,
+    y: Math.min(indexTip.y, otherTip.y) - gap / 2,
+    size,
+  };
 }
 
 // MediaPipe's per-frame handedness label can flicker even for the same

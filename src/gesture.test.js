@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   isMiniHeart, isFingerCurled, isFingerExtended, isOpenPalm, isPointingUp, isPeace,
-  detectGesture, gesturePlacement, majorityHandedness, majorityBoolean
+  detectGesture, gesturePlacement, fingertipUnit, majorityHandedness, majorityBoolean
 } from './gesture.js';
 
 // 21-point MediaPipe hand landmark array, all zeroed except the indices
@@ -152,11 +152,13 @@ describe('isFingerCurled', () => {
 });
 
 // Fingers extended straight up (tips far above their PIPs), wrist at bottom.
+// Landmark 7 (index DIP) is set in each: tip #8 -> #7 is X, the unit every
+// graphic is sized from. At vw=vh=100 each fixture below gives X = 10.
 const OPEN_PALM = {
   0: { x: 0.5, y: 0.9 },   // wrist
-  9: { x: 0.5, y: 0.6 },   // middle MCP (hand span)
+  9: { x: 0.5, y: 0.6 },   // middle MCP
   5: { x: 0.4, y: 0.6 }, 13: { x: 0.6, y: 0.6 }, 17: { x: 0.65, y: 0.62 }, // MCPs
-  6: { x: 0.45, y: 0.55 }, 8: { x: 0.45, y: 0.2 },   // index PIP/tip
+  6: { x: 0.45, y: 0.55 }, 7: { x: 0.45, y: 0.3 }, 8: { x: 0.45, y: 0.2 }, // index PIP/DIP/tip
   10: { x: 0.5, y: 0.55 }, 12: { x: 0.5, y: 0.15 },  // middle
   14: { x: 0.55, y: 0.55 }, 16: { x: 0.55, y: 0.2 }, // ring
   18: { x: 0.6, y: 0.55 }, 20: { x: 0.6, y: 0.25 },  // pinky
@@ -164,7 +166,7 @@ const OPEN_PALM = {
 // Index up, the other three folded back toward the wrist.
 const POINT_UP = {
   0: { x: 0.5, y: 0.9 }, 9: { x: 0.5, y: 0.6 },
-  6: { x: 0.5, y: 0.55 }, 8: { x: 0.5, y: 0.15 },    // index extended
+  6: { x: 0.5, y: 0.55 }, 7: { x: 0.5, y: 0.25 }, 8: { x: 0.5, y: 0.15 }, // index extended
   10: { x: 0.5, y: 0.55 }, 12: { x: 0.5, y: 0.8 },   // middle curled
   14: { x: 0.5, y: 0.55 }, 16: { x: 0.5, y: 0.8 },   // ring curled
   18: { x: 0.5, y: 0.55 }, 20: { x: 0.5, y: 0.8 },   // pinky curled
@@ -172,10 +174,16 @@ const POINT_UP = {
 // Index + middle up, ring + pinky folded.
 const PEACE = {
   0: { x: 0.5, y: 0.9 }, 9: { x: 0.5, y: 0.6 },
-  6: { x: 0.45, y: 0.55 }, 8: { x: 0.42, y: 0.15 },  // index extended
+  6: { x: 0.45, y: 0.55 }, 7: { x: 0.42, y: 0.25 }, 8: { x: 0.42, y: 0.15 }, // index extended
   10: { x: 0.55, y: 0.55 }, 12: { x: 0.58, y: 0.15 },// middle extended
   14: { x: 0.5, y: 0.55 }, 16: { x: 0.5, y: 0.8 },   // ring curled
   18: { x: 0.5, y: 0.55 }, 20: { x: 0.5, y: 0.8 },   // pinky curled
+};
+// Thumb tip crossing index tip — only the points placement needs.
+const MINI_HEART = {
+  0: { x: 0.5, y: 0.9 }, 9: { x: 0.5, y: 0.6 },
+  4: { x: 0.6, y: 0.36 },  // thumb tip
+  7: { x: 0.5, y: 0.4 }, 8: { x: 0.5, y: 0.3 },  // index DIP/tip
 };
 
 describe('isFingerExtended', () => {
@@ -230,26 +238,61 @@ describe('detectGesture', () => {
   });
 });
 
+describe('fingertipUnit', () => {
+  it('measures X from the index tip to its first knuckle', () => {
+    // tip (50,15) -> DIP (50,25) at vw=vh=100
+    expect(fingertipUnit(landmarks(POINT_UP), 100, 100)).toBeCloseTo(10, 5);
+  });
+});
+
 describe('gesturePlacement', () => {
-  it('anchors the pointing graphic above the index fingertip', () => {
-    // vw=vh=100: wrist (50,90), middleMcp (50,60) -> handSpan 30.
-    const p = gesturePlacement('point-up', landmarks(POINT_UP), 100, 100);
-    expect(p.x).toBeCloseTo(50, 5);       // index tip x
-    expect(p.y).toBeCloseTo(15 - 33, 5);  // tip y (15) lifted by handSpan*1.1
-    expect(p.size).toBeCloseTo(30 * 0.7, 5);
+  it('sizes every gesture to a 3X box, whatever the gesture', () => {
+    for (const [type, fixture] of [
+      ['point-up', POINT_UP], ['peace', PEACE], ['mini-heart', MINI_HEART], ['open-palm', OPEN_PALM]
+    ]) {
+      expect(gesturePlacement(type, landmarks(fixture), 100, 100).size).toBeCloseTo(30, 5);
+    }
   });
 
-  it('centres the open-palm graphic on the palm and sizes it to the hand', () => {
+  it('scales the box with the hand: X doubles -> box doubles', () => {
+    const closer = { ...POINT_UP, 7: { x: 0.5, y: 0.35 } }; // tip->DIP now 20
+    expect(gesturePlacement('point-up', landmarks(closer), 100, 100).size).toBeCloseTo(60, 5);
+  });
+
+  it('puts the point-up graphic bottom one X above the index fingertip', () => {
+    const p = gesturePlacement('point-up', landmarks(POINT_UP), 100, 100);
+    expect(p.x).toBeCloseTo(50, 5);        // centred on the fingertip
+    expect(p.y).toBeCloseTo(15 - 10, 5);   // one X of clear air above the tip
+  });
+
+  it('puts the peace graphic bottom half the fingertip gap above the higher finger, centred between them', () => {
+    // tips (42,15) and (58,15): gap 16 -> half is 8; midpoint x 50
+    const p = gesturePlacement('peace', landmarks(PEACE), 100, 100);
+    expect(p.x).toBeCloseTo(50, 5);
+    expect(p.y).toBeCloseTo(15 - 8, 5);
+  });
+
+  it('lifts the peace graphic off whichever finger is higher, not their average', () => {
+    // middle tip dropped to y=25; index (42,15) stays the higher one
+    const uneven = { ...PEACE, 12: { x: 0.58, y: 0.25 } };
+    const gap = Math.hypot(58 - 42, 25 - 15);
+    const p = gesturePlacement('peace', landmarks(uneven), 100, 100);
+    expect(p.y).toBeCloseTo(15 - gap / 2, 5);
+  });
+
+  it('applies the same two-finger construction to the mini heart, over thumb + index', () => {
+    // index tip (50,30), thumb tip (60,36): gap sqrt(136), midpoint x 55, higher y 30
+    const gap = Math.hypot(60 - 50, 36 - 30);
+    const p = gesturePlacement('mini-heart', landmarks(MINI_HEART), 100, 100);
+    expect(p.x).toBeCloseTo(55, 5);
+    expect(p.y).toBeCloseTo(30 - gap / 2, 5);
+  });
+
+  it('anchors the open-palm graphic on the palm centre', () => {
+    // centroid of wrist + MCPs (5,9,13,17): xs .5,.4,.5,.6,.65 -> .53; ys .9,.6,.6,.6,.62 -> .664
     const p = gesturePlacement('open-palm', landmarks(OPEN_PALM), 100, 100);
-    // centroid of wrist + 4 MCPs (5,9,13,17): xs .5,.4,.5,.6,.65 -> .53; ys .9,.6,.6,.6,.62 -> .664
     expect(p.x).toBeCloseTo(53, 0);
     expect(p.y).toBeCloseTo(66.4, 0);
-    expect(p.size).toBeCloseTo(30 * 1.7, 5);
-  });
-
-  it('places the peace graphic above the midpoint of the two raised fingers', () => {
-    const p = gesturePlacement('peace', landmarks(PEACE), 100, 100);
-    expect(p.x).toBeCloseTo((42 + 58) / 2, 5); // midpoint of index/middle tips
   });
 });
 
