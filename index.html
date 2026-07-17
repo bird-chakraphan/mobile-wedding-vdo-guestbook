@@ -33,6 +33,15 @@
     padding: 16px 32px; font-size: 18px; border-radius: 30px;
     border: none; background: #e84393; color: #fff; cursor: pointer;
   }
+  #startBtn:disabled { background: #555; cursor: not-allowed; opacity: .7; }
+
+  #gestureHint {
+    position: absolute; z-index: 5; bottom: 96px; left: 50%;
+    transform: translateX(-50%); width: 100%; max-width: 460px;
+    display: none; text-align: center; color: rgba(255,255,255,.9);
+    font-size: 14px; line-height: 1.5; text-shadow: 0 1px 3px #000;
+    padding: 0 16px; box-sizing: border-box;
+  }
 
   #webviewNotice {
     position: absolute; z-index: 30; inset: 0; background: #000;
@@ -91,10 +100,13 @@
 <div id="entry">
   <p>💌 Record a video message for the couple!<br>
   อัดคลิปวิดีโออวยพรให้บ่าวสาวกันเถอะ</p>
-  <p>Make a finger heart 🫰 while recording to pop hearts on screen.<br>
-  ทำท่ามินิฮาร์ท 🫰 ระหว่างอัดเพื่อให้หัวใจลอยขึ้นมา</p>
-  <input id="nameInput" type="text" placeholder="Your name / ชื่อของคุณ" maxlength="60">
+  <input id="nameInput" type="text" placeholder="Your name / ชื่อของคุณ *" maxlength="60" required>
   <button id="startBtn" disabled>Loading AI models…</button>
+</div>
+
+<div id="gestureHint">
+  Make a finger heart 🫰 while recording to pop hearts on screen.<br>
+  ทำท่ามินิฮาร์ท 🫰 ระหว่างอัดเพื่อให้หัวใจลอยขึ้นมา
 </div>
 
 <div id="webviewNotice">

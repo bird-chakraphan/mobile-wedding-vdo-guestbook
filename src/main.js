@@ -53,6 +53,7 @@ const entry   = document.getElementById('entry');
 const nameInput = document.getElementById('nameInput');
 const webviewNotice = document.getElementById('webviewNotice');
 const preRollEl = document.getElementById('preRoll');
+const gestureHint = document.getElementById('gestureHint');
 const startBtn = document.getElementById('startBtn');
 const status  = document.getElementById('status');
 const controls = document.getElementById('controls');
@@ -121,9 +122,20 @@ async function loadModels() {
   try { handLandmarker = await createHandLandmarker("GPU"); }
   catch { handLandmarker = await createHandLandmarker("CPU"); }
 
-  startBtn.disabled = false;
+  modelsReady = true;
   startBtn.textContent = "Start camera";
+  refreshStartButton();
 }
+
+// Start is allowed only once the models are loaded AND the guest has
+// entered a (non-blank) name.
+let modelsReady = false;
+
+function refreshStartButton() {
+  startBtn.disabled = !modelsReady || nameInput.value.trim() === '';
+}
+
+nameInput.addEventListener('input', refreshStartButton);
 
 // In-app webviews (LINE/IG/FB) break camera access — show the bilingual
 // "open in browser" screen and load nothing else.
@@ -159,6 +171,7 @@ startBtn.addEventListener('click', async () => {
 
   entry.remove();
   controls.style.display = 'flex';
+  gestureHint.style.display = 'block';
   requestAnimationFrame(loop);
 });
 
