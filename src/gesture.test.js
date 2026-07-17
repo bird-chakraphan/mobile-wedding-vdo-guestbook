@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   isMiniHeart, isFingerCurled, isFingerExtended, isOpenPalm, isPointingUp, isPeace,
-  detectGesture, gesturePlacement, fingertipUnit, majorityHandedness, majorityBoolean
+  detectGesture, gesturePlacement, fingertipUnit, majorityHandedness, majorityBoolean,
+  gestureHintText, GESTURE_OPTIONS
 } from './gesture.js';
 
 // 21-point MediaPipe hand landmark array, all zeroed except the indices
@@ -313,5 +314,27 @@ describe('majorityBoolean', () => {
 
   it('is false when most recent frames did not match', () => {
     expect(majorityBoolean([false, true, false, false, true])).toBe(false);
+  });
+});
+
+describe('gestureHintText', () => {
+  it('names the staff-selected gesture so the guest hint matches what pops the graphic', () => {
+    expect(gestureHintText('peace')).toBe('Make a peace sign ✌️ while recording to pop a graphic.');
+    expect(gestureHintText('open-palm')).toBe('Make an open palm ✋ while recording to pop a graphic.');
+    expect(gestureHintText('point-up')).toBe('Make a pointing finger ☝️ while recording to pop a graphic.');
+    expect(gestureHintText('mini-heart')).toBe('Make a mini heart 🫰 while recording to pop a graphic.');
+  });
+
+  // Matches detectGesture's default: an unknown/absent gesture_type behaves
+  // as mini-heart, so the hint must not disagree with what is detected.
+  it('falls back to the default gesture for an unknown type', () => {
+    expect(gestureHintText('nonsense')).toBe(gestureHintText(GESTURE_OPTIONS[0].value));
+    expect(gestureHintText(undefined)).toBe(gestureHintText(GESTURE_OPTIONS[0].value));
+  });
+
+  it('has hint wording for every staff-selectable gesture', () => {
+    for (const option of GESTURE_OPTIONS) {
+      expect(gestureHintText(option.value)).toMatch(/^Make .+ while recording to pop a graphic\.$/);
+    }
   });
 });

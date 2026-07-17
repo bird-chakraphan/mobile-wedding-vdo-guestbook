@@ -5,7 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Wedding VDO Guest Book</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; font-family: sans-serif; }
+  /* 100dvh, not 100%: with viewport-fit=cover the initial containing block
+     runs behind Safari's toolbar, so a 100%-tall body anchors bottom:24px
+     UNDERNEATH it and the controls vanish. dvh tracks the visible viewport
+     instead. main.js sizes the preview box off this same box's clientHeight.
+     vh first as the fallback for older iOS. */
+  html, body {
+    margin: 0; height: 100vh; height: 100dvh;
+    background: #000; overflow: hidden; font-family: sans-serif;
+  }
 
   /* video stays hidden — we show the PROCESSED canvas instead (same
      approach as beauty-filter-camera.html) */
@@ -37,8 +45,10 @@
   }
   #startBtn:disabled { background: #555; cursor: not-allowed; opacity: .7; }
 
+  /* every fixed edge offset below clears the notch / home indicator that
+     viewport-fit=cover lets the page draw under */
   #gestureHint {
-    position: absolute; z-index: 5; bottom: 96px; left: 50%;
+    position: absolute; z-index: 5; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); left: 50%;
     transform: translateX(-50%); width: 100%; max-width: 460px;
     display: none; text-align: center; color: rgba(255,255,255,.9);
     font-size: 14px; line-height: 1.5; text-shadow: 0 1px 3px #000;
@@ -62,13 +72,13 @@
   #status.warning { color: #ff5252; font-weight: bold; }
 
   #status {
-    position: absolute; z-index: 5; top: 16px; width: 100%;
+    position: absolute; z-index: 5; top: calc(16px + env(safe-area-inset-top, 0px)); width: 100%;
     text-align: center; color: rgba(255,255,255,.85); font-size: 14px;
     text-shadow: 0 1px 3px #000; padding: 0 12px; box-sizing: border-box;
   }
 
   #controls {
-    position: absolute; z-index: 5; bottom: 24px; left: 50%;
+    position: absolute; z-index: 5; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); left: 50%;
     transform: translateX(-50%);
     display: none; gap: 16px;
   }
@@ -106,10 +116,8 @@
   <button id="startBtn" disabled>Loading AI models…</button>
 </div>
 
-<div id="gestureHint">
-  Make a finger heart 🫰 while recording to pop hearts on screen.<br>
-  ทำท่ามินิฮาร์ท 🫰 ระหว่างอัดเพื่อให้หัวใจลอยขึ้นมา
-</div>
+<!-- text is set from the staff-selected gesture in main.js (gestureHintText) -->
+<div id="gestureHint"></div>
 
 <div id="webviewNotice">
   <p>📱 กรุณาเปิดในเบราว์เซอร์</p>

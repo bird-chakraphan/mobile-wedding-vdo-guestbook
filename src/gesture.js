@@ -90,13 +90,25 @@ export function isPeace(landmarks, vw, vh) {
 }
 
 // Staff-selectable gesture set (value = DB gesture_type, label for the
-// Staff Page dropdown). First entry is the default.
+// Staff Page dropdown, hintName for the guest's on-screen hint). First entry
+// is the default. hintName carries its own article so gestureHintText below
+// reads naturally for both "a" and "an" gestures.
 export const GESTURE_OPTIONS = [
-  { value: 'mini-heart', label: 'Mini heart 🫰' },
-  { value: 'open-palm', label: 'Open palm ✋' },
-  { value: 'point-up', label: 'Point up ☝️' },
-  { value: 'peace', label: 'Peace ✌️' },
+  { value: 'mini-heart', label: 'Mini heart 🫰', hintName: 'a mini heart 🫰' },
+  { value: 'open-palm', label: 'Open palm ✋', hintName: 'an open palm ✋' },
+  { value: 'point-up', label: 'Point up ☝️', hintName: 'a pointing finger ☝️' },
+  { value: 'peace', label: 'Peace ✌️', hintName: 'a peace sign ✌️' },
 ];
+
+// The guest's record-screen hint. The gesture is staff-configurable, so the
+// hint has to name whichever one is selected rather than hard-coding the
+// finger heart. Unknown/absent types fall back to the default gesture, the
+// same way detectGesture does — the hint must never contradict what is
+// actually being detected.
+export function gestureHintText(type) {
+  const option = GESTURE_OPTIONS.find(o => o.value === type) || GESTURE_OPTIONS[0];
+  return `Make ${option.hintName} while recording to pop a graphic.`;
+}
 
 export function detectGesture(type, landmarks, vw, vh) {
   switch (type) {

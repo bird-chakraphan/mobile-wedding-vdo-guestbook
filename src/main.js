@@ -12,7 +12,7 @@
 import { FaceLandmarker, HandLandmarker, FilesetResolver }
   from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 import { supabase } from './supabaseClient.js';
-import { detectGesture, gesturePlacement, majorityHandedness, majorityBoolean } from './gesture.js';
+import { detectGesture, gesturePlacement, gestureHintText, majorityHandedness, majorityBoolean } from './gesture.js';
 import { pickMimeType, buildFilename, sanitizeName, withRetries } from './recording.js';
 import { nextHeartState } from './heartAnimation.js';
 import { computeWarpStrips } from './faceWarp.js';
@@ -147,8 +147,12 @@ if (inWebview) {
   webviewNotice.style.display = 'flex';
   entry.style.display = 'none';
 } else {
+  // Show the default gesture's hint immediately so the line is never blank,
+  // then correct it once the staff's actual choice arrives.
+  gestureHint.textContent = gestureHintText(settings.gestureType);
   loadSettings(supabase).then(loaded => {
     settings = loaded;
+    gestureHint.textContent = gestureHintText(settings.gestureType);
     loadGestureImage('Left', settings.gestureLeftUrl);
     loadGestureImage('Right', settings.gestureRightUrl);
     loadFrameImage(settings.frameUrl);
@@ -405,14 +409,32 @@ function loop() {
   const vw = video.videoWidth, vh = video.videoHeight;
   if (!vw) { requestAnimationFrame(loop); return; }
 
-  // The visible/recorded area is a box in the staff-chosen output ratio,
-  // fitted inside the screen with an even edge gap (CSS centres it). The
-  // camera cover-crops into that box.
-  const pad = edgePadding(Math.min(window.innerWidth, window.innerHeight));
-  const box = previewBox(window.innerWidth, window.innerHeight,
+  // Issue #8: the canvas BACKING STORE is the staff preset's true pixel size,
+  // so captureStream — and therefore every recorded clip — comes out exactly
+  // 1080x1920 (or whichever preset) no matter what phone this is. Assigning
+  // width/height also clears the canvas, so only do it on a real change; the
+  // cover-fit drawImage below repaints every pixel each frame anyway.
+  if (out.width !== settings.outputWidth || out.height !== settings.outputHeight) {
+    out.width = settings.outputWidth;
+    out.height = settings.outputHeight;
+  }
+
+  // CSS then displays that fixed-size canvas scaled down into a box of the
+  // same ratio, fitted inside the screen with an even edge gap — same
+  // composition the guest sees, just at screen size rather than clip size.
+  //
+  // Measure the <html> box (100dvh, overflow:hidden) rather than
+  // window.innerHeight: the two can disagree — on iOS Safari innerHeight
+  // moves with the toolbar — and CSS centres this canvas against the former,
+  // so reading the same box is what keeps the preview centred where CSS puts it.
+  const availW = document.documentElement.clientWidth;
+  const availH = document.documentElement.clientHeight;
+  const pad = edgePadding(Math.min(availW, availH));
+  const box = previewBox(availW, availH,
     settings.outputWidth, settings.outputHeight, pad);
-  out.width = Math.round(box.width);
-  out.height = Math.round(box.height);
+  out.style.width = `${Math.round(box.width)}px`;
+  out.style.height = `${Math.round(box.height)}px`;
+
   const scale = Math.max(out.width / vw, out.height / vh);
   const dx = (out.width - vw * scale) / 2;
   const dy = (out.height - vh * scale) / 2;
