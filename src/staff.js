@@ -8,10 +8,12 @@ import { isMiniHeart, majorityHandedness, majorityBoolean } from './gesture.js';
 import { nextHeartState } from './heartAnimation.js';
 import { computeWarpStrips } from './faceWarp.js';
 import { shouldUseGraphicImage } from './gestureGraphic.js';
+import { edgePadding, previewBox, aspectFit } from './previewLayout.js';
 
 const passcodeGate = document.getElementById('passcodeGate');
 const passcodeInput = document.getElementById('passcodeInput');
 const unlockBtn = document.getElementById('unlockBtn');
+const workspace = document.getElementById('workspace');
 const form = document.getElementById('settingsForm');
 const timeLimitInput = document.getElementById('timeLimitInput');
 const smoothInput = document.getElementById('smoothInput');
@@ -45,9 +47,23 @@ const ASSET_INPUTS = [
    enough in scope that forcing an abstraction now would be premature.
    ============================================================ */
 
+const previewColumn = document.getElementById('previewColumn');
 const previewVideo = document.getElementById('previewVideo');
 const previewCanvas = document.getElementById('previewCanvas');
+const viewToggle = document.getElementById('viewToggle');
 const pctx = previewCanvas.getContext('2d');
+
+// "Show detection" toggle: false = the composited output a guest sees
+// (with frame); true = the hand-skeleton overlay for checking the model.
+let debugView = false;
+
+const HAND_BONES = [
+  [0,1],[1,2],[2,3],[3,4],        // thumb
+  [0,5],[5,6],[6,7],[7,8],        // index finger
+  [0,9],[9,10],[10,11],[11,12],   // middle finger
+  [0,13],[13,14],[14,15],[15,16], // ring finger
+  [0,17],[17,18],[18,19],[19,20]  // pinky
+];
 
 const blurCanvas = document.createElement('canvas');
 const maskCanvas = document.createElement('canvas');
@@ -126,6 +142,29 @@ function loadGestureImage(label, url) {
   gestureImages[label] = state;
 }
 
+let frameImage = null;
+
+function loadFrameImage(url) {
+  if (!url) { frameImage = null; return; }
+  const img = new Image();
+  const state = { url, loaded: false, failed: false, img };
+  img.onload = () => { state.loaded = true; };
+  img.onerror = () => { state.failed = true; };
+  img.src = url;
+  frameImage = state;
+}
+
+// Counter-mirror the frame against the canvas's CSS selfie mirror so its
+// text/logo reads correctly — matches the guest page (see main.js drawFrame).
+function drawFrame(boxW, boxH) {
+  if (!frameImage || !shouldUseGraphicImage(frameImage)) return;
+  pctx.save();
+  pctx.translate(boxW, 0);
+  pctx.scale(-1, 1);
+  pctx.drawImage(frameImage.img, 0, 0, boxW, boxH);
+  pctx.restore();
+}
+
 function tracePath(c, landmarks, indices) {
   const vw = previewVideo.videoWidth, vh = previewVideo.videoHeight;
   c.beginPath();
@@ -199,7 +238,8 @@ function drawHearts() {
     pctx.save();
     pctx.globalAlpha = h.alpha;
     if (graphic && shouldUseGraphicImage(graphic)) {
-      pctx.drawImage(graphic.img, h.x - size / 2, h.y - size / 2, size, size);
+      const { width, height } = aspectFit(size, graphic.img.naturalWidth, graphic.img.naturalHeight);
+      pctx.drawImage(graphic.img, h.x - width / 2, h.y - height / 2, width, height);
     } else {
       pctx.fillStyle = HEART_COLORS[label];
       drawHeartPath(pctx, h.x, h.y, size);
@@ -207,6 +247,27 @@ function drawHearts() {
     }
     pctx.restore();
   }
+}
+
+// Detection-view overlay: hand landmarks + bones, green when the current
+// geometry satisfies the mini-heart check (mirrors main.js's tuning aid).
+function drawHandSkeleton(landmarks, vw, vh, matches) {
+  const pts = landmarks.map(lm => toScreen(lm, vw, vh, previewCanvas.width, previewCanvas.height));
+  pctx.strokeStyle = matches ? 'rgba(0,255,120,0.9)' : 'rgba(0,255,200,0.6)';
+  pctx.lineWidth = 2;
+  for (const [a, b] of HAND_BONES) {
+    pctx.beginPath();
+    pctx.moveTo(pts[a].x, pts[a].y);
+    pctx.lineTo(pts[b].x, pts[b].y);
+    pctx.stroke();
+  }
+  pts.forEach((p, i) => {
+    const isPinchPoint = i === 4 || i === 8;
+    pctx.fillStyle = isPinchPoint ? '#ff3d6e' : 'rgba(255,255,255,0.8)';
+    pctx.beginPath();
+    pctx.arc(p.x, p.y, isPinchPoint ? 7 : 4, 0, Math.PI * 2);
+    pctx.fill();
+  });
 }
 
 let lastVideoTime = -1;
@@ -233,8 +294,14 @@ function previewLoop() {
   const vw = previewVideo.videoWidth, vh = previewVideo.videoHeight;
   if (!vw) { requestAnimationFrame(previewLoop); return; }
 
-  previewCanvas.width = previewCanvas.clientWidth;
-  previewCanvas.height = previewCanvas.clientHeight;
+  // Preview box follows the CURRENTLY SELECTED output ratio (live, not the
+  // saved value) so changing the preset reshapes the preview immediately.
+  const preset = OUTPUT_PRESETS[presetSelect.value] || { width: 1080, height: 1920 };
+  const pad = edgePadding(window.innerWidth);
+  const box = previewBox(previewColumn.clientWidth, previewColumn.clientHeight,
+    preset.width, preset.height, pad);
+  previewCanvas.width = Math.round(box.width);
+  previewCanvas.height = Math.round(box.height);
   const scale = Math.max(previewCanvas.width / vw, previewCanvas.height / vh);
   const dx = (previewCanvas.width - vw * scale) / 2;
   const dy = (previewCanvas.height - vh * scale) / 2;
@@ -299,6 +366,8 @@ function previewLoop() {
         size: handSpan * HEART_SIZE_MULTIPLIER
       };
     }
+
+    if (debugView) drawHandSkeleton(landmarks, vw, vh, matchesGeometry);
   });
 
   for (const label of ['Right', 'Left']) {
@@ -308,6 +377,10 @@ function previewLoop() {
     });
   }
   drawHearts();
+
+  // Frame overlay only in the "actual" view — the detection view keeps the
+  // skeleton unobstructed.
+  if (!debugView) drawFrame(previewCanvas.width, previewCanvas.height);
 
   requestAnimationFrame(previewLoop);
 }
@@ -358,6 +431,7 @@ async function populateForm() {
   presetSelect.value = presetKeyFor(settings.outputWidth, settings.outputHeight);
   loadGestureImage('Left', settings.gestureLeftUrl);
   loadGestureImage('Right', settings.gestureRightUrl);
+  loadFrameImage(settings.frameUrl);
 }
 
 smoothInput.addEventListener('input', () => { smoothVal.textContent = smoothInput.value; });
@@ -365,11 +439,16 @@ glowInput.addEventListener('input', () => { glowVal.textContent = glowInput.valu
 vshapeInput.addEventListener('input', () => { vshapeVal.textContent = vshapeInput.value; });
 narrowInput.addEventListener('input', () => { narrowVal.textContent = narrowInput.value; });
 
+viewToggle.addEventListener('click', () => {
+  debugView = !debugView;
+  viewToggle.textContent = debugView ? 'Show actual' : 'Show detection';
+});
+
 unlockBtn.addEventListener('click', async () => {
   passcode = passcodeInput.value;
   if (!passcode) return;
   passcodeGate.style.display = 'none';
-  form.style.display = 'block';
+  workspace.style.display = 'flex';
   status.textContent = '';
   await populateForm();
   await modelsPromise;
@@ -425,7 +504,19 @@ form.addEventListener('submit', async (e) => {
   });
 
   const { error } = await supabase.rpc('update_staff_settings', payload);
-  status.textContent = error
-    ? `Save failed: ${error.message}`
-    : 'Saved ✓ — guest phones will use these settings on next load.';
+  if (error) {
+    status.textContent = `Save failed: ${error.message}`;
+    return;
+  }
+
+  // Reflect just-uploaded assets in the live preview immediately. The URL is
+  // fixed per slot, so a plain reload would hit the browser cache and show
+  // the old image — bust it with a one-off query param (the saved DB URL
+  // stays clean, so guests get a stable link).
+  const bust = (u) => `${u}${u.includes('?') ? '&' : '?'}v=${Date.now()}`;
+  if (assetUrls.frameUrl) loadFrameImage(bust(assetUrls.frameUrl));
+  if (assetUrls.gestureLeftUrl) loadGestureImage('Left', bust(assetUrls.gestureLeftUrl));
+  if (assetUrls.gestureRightUrl) loadGestureImage('Right', bust(assetUrls.gestureRightUrl));
+
+  status.textContent = 'Saved ✓ — guest phones will use these settings on next load.';
 });

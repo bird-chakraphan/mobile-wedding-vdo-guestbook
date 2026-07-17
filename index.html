@@ -11,10 +11,12 @@
      approach as beauty-filter-camera.html) */
   #video { display: none; }
 
+  /* ratio-locked preview box, centred with an even edge gap; its pixel
+     size is set per-frame in JS to the staff-chosen output ratio */
   #outCanvas {
-    position: absolute; top: 0; left: 0;
-    width: 100vw; height: 100vh;
-    transform: scaleX(-1); /* selfie mirror */
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%) scaleX(-1); /* centre + selfie mirror */
+    border-radius: 4px;
   }
 
   #entry {

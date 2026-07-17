@@ -17,6 +17,7 @@ import { pickMimeType, buildFilename, sanitizeName, withRetries } from './record
 import { nextHeartState } from './heartAnimation.js';
 import { computeWarpStrips } from './faceWarp.js';
 import { shouldUseGraphicImage } from './gestureGraphic.js';
+import { edgePadding, previewBox, aspectFit } from './previewLayout.js';
 import { loadSettings, SETTINGS_DEFAULTS } from './settings.js';
 import { preRollRemaining, recordingStatus } from './countdown.js';
 import { isInAppWebview } from './webview.js';
@@ -36,9 +37,9 @@ const PRE_ROLL_SECONDS = 5;
 const HANDEDNESS_FLIPPED = false;
 
 // Tuning aid for gesture detection — draws the 21 hand landmarks, bone
-// connections, and live pinch/curl numbers on screen. Flip to false once
-// the gesture feels reliable; not meant to ship to real guests.
-const DEBUG_SKELETON = true;
+// connections, and live pinch/curl numbers on screen. Off for real guests;
+// the staff preview has its own "detection" toggle for checking the model.
+const DEBUG_SKELETON = false;
 
 const HAND_BONES = [
   [0,1],[1,2],[2,3],[3,4],        // thumb
@@ -150,6 +151,7 @@ if (inWebview) {
     settings = loaded;
     loadGestureImage('Left', settings.gestureLeftUrl);
     loadGestureImage('Right', settings.gestureRightUrl);
+    loadFrameImage(settings.frameUrl);
   });
   loadModels().catch(err => {
     console.error('model loading failed:', err);
@@ -303,6 +305,32 @@ function loadGestureImage(label, url) {
   gestureImages[label] = state;
 }
 
+// Staff-uploaded frame overlay (transparent PNG) — the top composition
+// layer, drawn to fill the whole output box. Preloaded like the gesture
+// graphics; shouldUseGraphicImage gates it the same way.
+let frameImage = null;
+
+function loadFrameImage(url) {
+  if (!url) { frameImage = null; return; }
+  const img = new Image();
+  const state = { url, loaded: false, failed: false, img };
+  img.onload = () => { state.loaded = true; };
+  img.onerror = () => { state.failed = true; };
+  img.src = url;
+  frameImage = state;
+}
+
+// The output canvas is CSS-mirrored (selfie view); counter-mirror the frame
+// as we draw so any text/logo in it still reads correctly on screen.
+function drawFrame(ctx, boxW, boxH) {
+  if (!frameImage || !shouldUseGraphicImage(frameImage)) return;
+  ctx.save();
+  ctx.translate(boxW, 0);
+  ctx.scale(-1, 1);
+  ctx.drawImage(frameImage.img, 0, 0, boxW, boxH);
+  ctx.restore();
+}
+
 function drawHeartPath(ctx, cx, cy, size) {
   const top = cy + size * 0.28;
   ctx.beginPath();
@@ -324,7 +352,8 @@ function drawHearts() {
     octx.save();
     octx.globalAlpha = h.alpha;
     if (graphic && shouldUseGraphicImage(graphic)) {
-      octx.drawImage(graphic.img, h.x - size / 2, h.y - size / 2, size, size);
+      const { width, height } = aspectFit(size, graphic.img.naturalWidth, graphic.img.naturalHeight);
+      octx.drawImage(graphic.img, h.x - width / 2, h.y - height / 2, width, height);
     } else {
       octx.fillStyle = HEART_COLORS[label];
       drawHeartPath(octx, h.x, h.y, size);
@@ -379,8 +408,14 @@ function loop() {
   const vw = video.videoWidth, vh = video.videoHeight;
   if (!vw) { requestAnimationFrame(loop); return; }
 
-  out.width = window.innerWidth;
-  out.height = window.innerHeight;
+  // The visible/recorded area is a box in the staff-chosen output ratio,
+  // fitted inside the screen with an even edge gap (CSS centres it). The
+  // camera cover-crops into that box.
+  const pad = edgePadding(Math.min(window.innerWidth, window.innerHeight));
+  const box = previewBox(window.innerWidth, window.innerHeight,
+    settings.outputWidth, settings.outputHeight, pad);
+  out.width = Math.round(box.width);
+  out.height = Math.round(box.height);
   const scale = Math.max(out.width / vw, out.height / vh);
   const dx = (out.width - vw * scale) / 2;
   const dy = (out.height - vh * scale) / 2;
@@ -468,6 +503,7 @@ function loop() {
     });
   }
   drawHearts();
+  drawFrame(octx, out.width, out.height);
 
   const gestureActive = tips.Right !== null || tips.Left !== null;
   if (!recording) {

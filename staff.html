@@ -5,77 +5,116 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wedding VDO Guest Book — Staff</title>
 <style>
-  body { margin: 0; min-height: 100vh; background: #111; color: #fff; font-family: sans-serif;
-    display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; }
-  #panel { width: 100%; max-width: 420px; }
-  h1 { font-size: 20px; margin-bottom: 24px; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: #111; color: #fff; font-family: sans-serif; overflow: hidden; }
+
   label { display: block; margin-bottom: 16px; font-size: 14px; }
   label span { display: block; margin-bottom: 6px; color: #aaa; }
   input[type=text], input[type=password], input[type=number], select {
-    width: 100%; box-sizing: border-box; padding: 10px 12px; font-size: 15px;
+    width: 100%; padding: 10px 12px; font-size: 15px;
     border-radius: 8px; border: 1px solid #444; background: #1a1a1a; color: #fff;
   }
   input[type=range] { width: 100%; accent-color: #e84393; }
+  input[type=file] { width: 100%; font-size: 13px; color: #ccc; }
   button {
     padding: 12px 24px; font-size: 15px; border-radius: 10px; border: none;
     background: #e84393; color: #fff; cursor: pointer; width: 100%;
   }
-  #status { margin-top: 14px; font-size: 14px; min-height: 20px; }
-  #settingsForm { display: none; }
+
+  /* passcode gate — shown first, centred */
+  #passcodeGate {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 24px;
+  }
+  #passcodeGate .box { width: 100%; max-width: 320px; }
+  #passcodeGate h1 { font-size: 20px; margin: 0 0 24px; }
+
+  /* workspace — preview column (left) + settings column (right) */
+  #workspace { display: none; height: 100vh; }
+  #previewColumn {
+    flex: 1; min-width: 0; position: relative; overflow: hidden; background: #000;
+    display: flex; align-items: center; justify-content: center;
+  }
   #previewVideo { display: none; }
   #previewCanvas {
-    display: none; width: 100%; height: 280px; border-radius: 12px;
-    background: #000; margin-bottom: 16px; transform: scaleX(-1); /* selfie mirror, matches guest page */
+    display: block; border-radius: 4px;
+    transform: scaleX(-1); /* selfie mirror, matches guest page */
+  }
+  #viewToggle {
+    position: absolute; top: 16px; right: 16px; width: auto;
+    padding: 8px 16px; font-size: 13px; background: rgba(0,0,0,.55);
+    border: 1px solid rgba(255,255,255,.25); backdrop-filter: blur(8px);
+  }
+  #settingsColumn {
+    width: 440px; max-width: 100%; height: 100vh; overflow-y: auto;
+    padding: 24px; background: #111;
+  }
+  #settingsColumn h1 { font-size: 20px; margin: 0 0 24px; }
+  #status { margin-top: 14px; font-size: 14px; min-height: 20px; }
+
+  /* stack on narrow screens: preview pinned to top, settings scroll below */
+  @media (max-width: 820px) {
+    body { overflow: auto; }
+    #workspace { flex-direction: column; height: auto; }
+    #previewColumn { height: 45vh; position: sticky; top: 0; z-index: 5; }
+    #settingsColumn { width: 100%; height: auto; overflow: visible; }
   }
 </style>
 </head>
 <body>
 
-<div id="panel">
-  <h1>Staff settings</h1>
-
-  <div id="passcodeGate">
+<div id="passcodeGate">
+  <div class="box">
+    <h1>Staff settings</h1>
     <label><span>Passcode</span>
       <input id="passcodeInput" type="password" autocomplete="off">
     </label>
     <button id="unlockBtn">Enter</button>
   </div>
+</div>
 
-  <video id="previewVideo" autoplay playsinline muted></video>
-  <canvas id="previewCanvas"></canvas>
+<div id="workspace">
+  <div id="previewColumn">
+    <button id="viewToggle">Show detection</button>
+    <video id="previewVideo" autoplay playsinline muted></video>
+    <canvas id="previewCanvas"></canvas>
+  </div>
 
-  <form id="settingsForm">
-    <label><span>Recording time limit (seconds)</span>
-      <input id="timeLimitInput" type="number" min="10" max="300">
-    </label>
-    <label><span>Skin smoothing: <span id="smoothVal"></span></span>
-      <input id="smoothInput" type="range" min="0" max="100">
-    </label>
-    <label><span>Glow: <span id="glowVal"></span></span>
-      <input id="glowInput" type="range" min="0" max="100">
-    </label>
-    <label><span>V-shape face: <span id="vshapeVal"></span></span>
-      <input id="vshapeInput" type="range" min="0" max="100">
-    </label>
-    <label><span>Narrow face: <span id="narrowVal"></span></span>
-      <input id="narrowInput" type="range" min="0" max="100">
-    </label>
-    <label><span>Output size</span>
-      <select id="presetSelect"></select>
-    </label>
-    <label><span>Frame overlay (optional, transparent PNG)</span>
-      <input id="frameFileInput" type="file" accept="image/*">
-    </label>
-    <label><span>Left-hand gesture graphic (optional)</span>
-      <input id="gestureLeftFileInput" type="file" accept="image/*">
-    </label>
-    <label><span>Right-hand gesture graphic (optional)</span>
-      <input id="gestureRightFileInput" type="file" accept="image/*">
-    </label>
-    <button id="saveBtn" type="submit">Save</button>
-  </form>
-
-  <div id="status"></div>
+  <div id="settingsColumn">
+    <h1>Staff settings</h1>
+    <form id="settingsForm">
+      <label><span>Recording time limit (seconds)</span>
+        <input id="timeLimitInput" type="number" min="10" max="300">
+      </label>
+      <label><span>Skin smoothing: <span id="smoothVal"></span></span>
+        <input id="smoothInput" type="range" min="0" max="100">
+      </label>
+      <label><span>Glow: <span id="glowVal"></span></span>
+        <input id="glowInput" type="range" min="0" max="100">
+      </label>
+      <label><span>V-shape face: <span id="vshapeVal"></span></span>
+        <input id="vshapeInput" type="range" min="0" max="100">
+      </label>
+      <label><span>Narrow face: <span id="narrowVal"></span></span>
+        <input id="narrowInput" type="range" min="0" max="100">
+      </label>
+      <label><span>Output size</span>
+        <select id="presetSelect"></select>
+      </label>
+      <label><span>Frame overlay (optional, transparent PNG)</span>
+        <input id="frameFileInput" type="file" accept="image/*">
+      </label>
+      <label><span>Left-hand gesture graphic (optional)</span>
+        <input id="gestureLeftFileInput" type="file" accept="image/*">
+      </label>
+      <label><span>Right-hand gesture graphic (optional)</span>
+        <input id="gestureRightFileInput" type="file" accept="image/*">
+      </label>
+      <button id="saveBtn" type="submit">Save</button>
+    </form>
+    <div id="status"></div>
+  </div>
 </div>
 
 <script type="module" src="/src/staff.js"></script>
