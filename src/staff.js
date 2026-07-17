@@ -25,18 +25,64 @@ const vshapeVal = document.getElementById('vshapeVal');
 const narrowInput = document.getElementById('narrowInput');
 const narrowVal = document.getElementById('narrowVal');
 const presetSelect = document.getElementById('presetSelect');
-const frameFileInput = document.getElementById('frameFileInput');
-const gestureLeftFileInput = document.getElementById('gestureLeftFileInput');
-const gestureRightFileInput = document.getElementById('gestureRightFileInput');
 const status = document.getElementById('status');
 
-// Fixed per-slot filenames in the 'assets' bucket (upsert on upload) so
-// re-uploads replace rather than accumulate — see ADR-0003.
-const ASSET_INPUTS = [
-  { input: frameFileInput, filename: 'frame', key: 'frameUrl' },
-  { input: gestureLeftFileInput, filename: 'gesture-left', key: 'gestureLeftUrl' },
-  { input: gestureRightFileInput, filename: 'gesture-right', key: 'gestureRightUrl' }
-];
+// One entry per uploadable asset, tying its file input to a fixed slot
+// filename in the 'assets' bucket (upsert on upload, so re-uploads replace
+// rather than accumulate — see ADR-0003) and to its current-upload
+// thumbnail + Remove button. `slot`/`handLabel` route changes to the live
+// preview. `markedForRemoval`/`currentUrl` are mutated as staff edit.
+const ASSET_FIELDS = [
+  { slot: 'frame', handLabel: null, key: 'frameUrl', filename: 'frame' },
+  { slot: 'gesture', handLabel: 'Left', key: 'gestureLeftUrl', filename: 'gesture-left' },
+  { slot: 'gesture', handLabel: 'Right', key: 'gestureRightUrl', filename: 'gesture-right' }
+].map(f => {
+  const id = f.filename.replace(/-([a-z])/g, (_, c) => c.toUpperCase()); // frame, gestureLeft, gestureRight
+  return {
+    ...f,
+    input: document.getElementById(`${id}FileInput`),
+    current: document.getElementById(`${id}Current`),
+    preview: document.getElementById(`${id}Preview`),
+    removeBtn: document.getElementById(`${id}RemoveBtn`),
+    markedForRemoval: false,
+    currentUrl: null
+  };
+});
+
+function applyAssetToPreview(field, url) {
+  if (field.slot === 'frame') loadFrameImage(url);
+  else loadGestureImage(field.handLabel, url);
+}
+
+function showCurrent(field, url) {
+  field.preview.src = url;
+  field.current.style.display = 'flex';
+}
+
+function hideCurrent(field) {
+  field.current.style.display = 'none';
+}
+
+// A fixed-slot URL is stable across re-uploads, so the browser would serve
+// the cached old image — bust it for the in-page preview only (the saved DB
+// URL stays clean so guests get a stable link).
+function bustCache(url) {
+  return `${url}${url.includes('?') ? '&' : '?'}v=${Date.now()}`;
+}
+
+for (const field of ASSET_FIELDS) {
+  field.removeBtn.addEventListener('click', () => {
+    field.markedForRemoval = true;
+    field.input.value = '';
+    hideCurrent(field);
+  });
+  field.input.addEventListener('change', () => {
+    const file = field.input.files[0];
+    if (!file) return;
+    field.markedForRemoval = false;
+    showCurrent(field, URL.createObjectURL(file)); // preview the newly picked file
+  });
+}
 
 /* ============================================================
    Live camera preview (issue #3) — a reduced port of main.js's
@@ -429,9 +475,17 @@ async function populateForm() {
   narrowInput.value = settings.beautyNarrow;
   narrowVal.textContent = settings.beautyNarrow;
   presetSelect.value = presetKeyFor(settings.outputWidth, settings.outputHeight);
-  loadGestureImage('Left', settings.gestureLeftUrl);
-  loadGestureImage('Right', settings.gestureRightUrl);
-  loadFrameImage(settings.frameUrl);
+
+  // Drive the live preview and show each asset's current upload (with its
+  // Remove button) or hide the row when nothing is set yet.
+  for (const field of ASSET_FIELDS) {
+    field.currentUrl = settings[field.key] || null;
+    field.markedForRemoval = false;
+    field.input.value = '';
+    applyAssetToPreview(field, field.currentUrl);
+    if (field.currentUrl) showCurrent(field, field.currentUrl);
+    else hideCurrent(field);
+  }
 }
 
 smoothInput.addEventListener('input', () => { smoothVal.textContent = smoothInput.value; });
@@ -455,28 +509,34 @@ unlockBtn.addEventListener('click', async () => {
   if (modelsReady) startPreviewCamera();
 });
 
-// Mints a short-lived upload token (proves the passcode) then uploads
-// each selected file to its fixed slot in the 'assets' bucket. Returns
-// {} untouched when no files were selected, so saving without any
-// upload stays exactly as cheap as before.
-async function uploadSelectedAssets() {
-  const selected = ASSET_INPUTS.filter(a => a.input.files[0]);
-  if (selected.length === 0) return {};
+// Resolves the asset-URL changes for a save: uploads any newly-picked files
+// (minting one passcode token to gate the writes) and marks removed assets
+// with '' (the RPC's clear sentinel). Assets left untouched are omitted, so
+// the RPC keeps their current value. Returns { frameUrl?, gestureLeftUrl?,
+// gestureRightUrl? }.
+async function resolveAssetChanges() {
+  const uploads = ASSET_FIELDS.filter(f => f.input.files[0]);
+  const removals = ASSET_FIELDS.filter(f => !f.input.files[0] && f.markedForRemoval);
 
-  const { error: tokenError } = await supabase.rpc('mint_upload_token', { p_passcode: passcode });
-  if (tokenError) throw new Error(`invalid passcode (${tokenError.message})`);
+  const changes = {};
 
-  const urls = {};
-  for (const { input, filename, key } of selected) {
-    const file = input.files[0];
-    const { error } = await supabase.storage.from('assets').upload(filename, file, {
-      upsert: true,
-      contentType: file.type
-    });
-    if (error) throw new Error(`${filename} upload failed (${error.message})`);
-    urls[key] = supabase.storage.from('assets').getPublicUrl(filename).data.publicUrl;
+  if (uploads.length) {
+    const { error: tokenError } = await supabase.rpc('mint_upload_token', { p_passcode: passcode });
+    if (tokenError) throw new Error(`invalid passcode (${tokenError.message})`);
+    for (const field of uploads) {
+      const file = field.input.files[0];
+      const { error } = await supabase.storage.from('assets').upload(field.filename, file, {
+        upsert: true,
+        contentType: file.type
+      });
+      if (error) throw new Error(`${field.filename} upload failed (${error.message})`);
+      changes[field.key] = supabase.storage.from('assets').getPublicUrl(field.filename).data.publicUrl;
+    }
   }
-  return urls;
+
+  for (const field of removals) changes[field.key] = '';
+
+  return changes;
 }
 
 form.addEventListener('submit', async (e) => {
@@ -484,9 +544,9 @@ form.addEventListener('submit', async (e) => {
   const preset = OUTPUT_PRESETS[presetSelect.value];
 
   status.textContent = 'Saving…';
-  let assetUrls;
+  let assetChanges;
   try {
-    assetUrls = await uploadSelectedAssets();
+    assetChanges = await resolveAssetChanges();
   } catch (err) {
     status.textContent = `Save failed: ${err.message}`;
     return;
@@ -500,7 +560,7 @@ form.addEventListener('submit', async (e) => {
     beautyNarrow: Number(narrowInput.value),
     outputWidth: preset.width,
     outputHeight: preset.height,
-    ...assetUrls
+    ...assetChanges
   });
 
   const { error } = await supabase.rpc('update_staff_settings', payload);
@@ -509,14 +569,23 @@ form.addEventListener('submit', async (e) => {
     return;
   }
 
-  // Reflect just-uploaded assets in the live preview immediately. The URL is
-  // fixed per slot, so a plain reload would hit the browser cache and show
-  // the old image — bust it with a one-off query param (the saved DB URL
-  // stays clean, so guests get a stable link).
-  const bust = (u) => `${u}${u.includes('?') ? '&' : '?'}v=${Date.now()}`;
-  if (assetUrls.frameUrl) loadFrameImage(bust(assetUrls.frameUrl));
-  if (assetUrls.gestureLeftUrl) loadGestureImage('Left', bust(assetUrls.gestureLeftUrl));
-  if (assetUrls.gestureRightUrl) loadGestureImage('Right', bust(assetUrls.gestureRightUrl));
+  // Reflect uploads and removals in the live preview + the current-upload
+  // thumbnail immediately, so the page matches what a guest will now load.
+  for (const field of ASSET_FIELDS) {
+    if (field.input.files[0]) {
+      const busted = bustCache(assetChanges[field.key]);
+      field.currentUrl = busted;
+      field.markedForRemoval = false;
+      field.input.value = '';
+      applyAssetToPreview(field, busted);
+      showCurrent(field, busted);
+    } else if (field.markedForRemoval) {
+      field.currentUrl = null;
+      field.markedForRemoval = false;
+      applyAssetToPreview(field, null);
+      hideCurrent(field);
+    }
+  }
 
   status.textContent = 'Saved ✓ — guest phones will use these settings on next load.';
 });

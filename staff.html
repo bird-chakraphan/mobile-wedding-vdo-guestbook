@@ -53,6 +53,18 @@
   #settingsColumn h1 { font-size: 20px; margin: 0 0 24px; }
   #status { margin-top: 14px; font-size: 14px; min-height: 20px; }
 
+  /* current-upload preview + remove, shown under each asset field */
+  .assetCurrent {
+    display: none; align-items: center; gap: 10px; margin: -8px 0 16px;
+  }
+  .assetThumb {
+    height: 48px; width: 48px; object-fit: contain;
+    border-radius: 4px; background: #000; border: 1px solid #333;
+  }
+  .assetRemove {
+    width: auto; padding: 6px 12px; font-size: 13px; background: #444;
+  }
+
   /* stack on narrow screens: preview pinned to top, settings scroll below */
   @media (max-width: 820px) {
     body { overflow: auto; }
@@ -105,12 +117,24 @@
       <label><span>Frame overlay (optional, transparent PNG)</span>
         <input id="frameFileInput" type="file" accept="image/*">
       </label>
+      <div class="assetCurrent" id="frameCurrent">
+        <img class="assetThumb" id="framePreview" alt="Current frame overlay">
+        <button type="button" class="assetRemove" id="frameRemoveBtn">Remove</button>
+      </div>
       <label><span>Left-hand gesture graphic (optional)</span>
         <input id="gestureLeftFileInput" type="file" accept="image/*">
       </label>
+      <div class="assetCurrent" id="gestureLeftCurrent">
+        <img class="assetThumb" id="gestureLeftPreview" alt="Current left-hand graphic">
+        <button type="button" class="assetRemove" id="gestureLeftRemoveBtn">Remove</button>
+      </div>
       <label><span>Right-hand gesture graphic (optional)</span>
         <input id="gestureRightFileInput" type="file" accept="image/*">
       </label>
+      <div class="assetCurrent" id="gestureRightCurrent">
+        <img class="assetThumb" id="gestureRightPreview" alt="Current right-hand graphic">
+        <button type="button" class="assetRemove" id="gestureRightRemoveBtn">Remove</button>
+      </div>
       <button id="saveBtn" type="submit">Save</button>
     </form>
     <div id="status"></div>

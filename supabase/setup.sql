@@ -120,9 +120,12 @@ begin
     beauty_glow        = coalesce(p_beauty_glow, beauty_glow),
     beauty_vshape      = coalesce(p_beauty_vshape, beauty_vshape),
     beauty_narrow      = coalesce(p_beauty_narrow, beauty_narrow),
-    frame_url          = coalesce(p_frame_url, frame_url),
-    gesture_left_url   = coalesce(p_gesture_left_url, gesture_left_url),
-    gesture_right_url  = coalesce(p_gesture_right_url, gesture_right_url),
+    -- asset URLs: null (param omitted) keeps the current value; an empty
+    -- string is the explicit "clear this asset" sentinel from the Staff
+    -- Page's Remove button; any other value replaces it.
+    frame_url          = case when p_frame_url = '' then null else coalesce(p_frame_url, frame_url) end,
+    gesture_left_url   = case when p_gesture_left_url = '' then null else coalesce(p_gesture_left_url, gesture_left_url) end,
+    gesture_right_url  = case when p_gesture_right_url = '' then null else coalesce(p_gesture_right_url, gesture_right_url) end,
     updated_at         = now()
   where id = 1;
 end;

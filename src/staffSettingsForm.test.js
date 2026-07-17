@@ -44,4 +44,18 @@ describe('buildSettingsPayload', () => {
     expect(payload.p_gesture_left_url).toBeUndefined();
     expect(payload.p_gesture_right_url).toBeUndefined();
   });
+
+  it('passes an empty-string asset URL straight through as the RPC clear sentinel', () => {
+    const payload = buildSettingsPayload('changeme', {
+      timeLimitSeconds: 45,
+      beautySmooth: 70,
+      beautyGlow: 20,
+      beautyVshape: 35,
+      beautyNarrow: 15,
+      outputWidth: 720,
+      outputHeight: 1280,
+      frameUrl: ''
+    });
+    expect(payload.p_frame_url).toBe('');
+  });
 });
