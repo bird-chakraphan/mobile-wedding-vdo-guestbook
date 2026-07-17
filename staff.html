@@ -22,6 +22,11 @@
   }
   #status { margin-top: 14px; font-size: 14px; min-height: 20px; }
   #settingsForm { display: none; }
+  #previewVideo { display: none; }
+  #previewCanvas {
+    display: none; width: 100%; height: 280px; border-radius: 12px;
+    background: #000; margin-bottom: 16px; transform: scaleX(-1); /* selfie mirror, matches guest page */
+  }
 </style>
 </head>
 <body>
@@ -35,6 +40,9 @@
     </label>
     <button id="unlockBtn">Enter</button>
   </div>
+
+  <video id="previewVideo" autoplay playsinline muted></video>
+  <canvas id="previewCanvas"></canvas>
 
   <form id="settingsForm">
     <label><span>Recording time limit (seconds)</span>

@@ -1,7 +1,13 @@
+import { FaceLandmarker, HandLandmarker, FilesetResolver }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 import { supabase } from './supabaseClient.js';
 import { loadSettings } from './settings.js';
 import { OUTPUT_PRESETS, presetKeyFor } from './outputPresets.js';
 import { buildSettingsPayload } from './staffSettingsForm.js';
+import { isMiniHeart, majorityHandedness, majorityBoolean } from './gesture.js';
+import { nextHeartState } from './heartAnimation.js';
+import { computeWarpStrips } from './faceWarp.js';
+import { shouldUseGraphicImage } from './gestureGraphic.js';
 
 const passcodeGate = document.getElementById('passcodeGate');
 const passcodeInput = document.getElementById('passcodeInput');
@@ -30,6 +36,305 @@ const ASSET_INPUTS = [
   { input: gestureRightFileInput, filename: 'gesture-right', key: 'gestureRightUrl' }
 ];
 
+/* ============================================================
+   Live camera preview (issue #3) — a reduced port of main.js's
+   guest render loop: same beauty pipeline, face reshape, and gesture
+   graphics, but reading slider values LIVE from the form instead of
+   from loadSettings(), and with no recording/countdown/name entry.
+   Intentionally a port, not a shared module — the two loops differ
+   enough in scope that forcing an abstraction now would be premature.
+   ============================================================ */
+
+const previewVideo = document.getElementById('previewVideo');
+const previewCanvas = document.getElementById('previewCanvas');
+const pctx = previewCanvas.getContext('2d');
+
+const blurCanvas = document.createElement('canvas');
+const maskCanvas = document.createElement('canvas');
+const skinCanvas = document.createElement('canvas');
+const compCanvas = document.createElement('canvas');
+const bctx = blurCanvas.getContext('2d');
+const mctx = maskCanvas.getContext('2d');
+const sctx = skinCanvas.getContext('2d');
+const cctx = compCanvas.getContext('2d');
+
+const FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,397,365,
+  379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,
+  103,67,109];
+const LEFT_EYE  = [33,246,161,160,159,158,157,173,133,155,154,153,145,144,163,7];
+const RIGHT_EYE = [263,466,388,387,386,385,384,398,362,382,381,380,374,373,390,249];
+const LIPS      = [61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,181,91,146];
+
+const HANDEDNESS_FLIPPED = false;
+const HANDEDNESS_WINDOW = 8;
+const GEOMETRY_WINDOW = 5;
+const HEART_HEIGHT_MULTIPLIER = 1.1;
+const HEART_SIZE_MULTIPLIER = 0.5;
+const HEART_COLORS = { Right: '#ff3355', Left: '#ff9ecb' };
+
+let faceLandmarker, handLandmarker, modelsReady = false;
+let previewStream = null;
+
+async function loadModels() {
+  const filesets = await FilesetResolver.forVisionTasks(
+    "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+  );
+  const createFaceLandmarker = (delegate) =>
+    FaceLandmarker.createFromOptions(filesets, {
+      baseOptions: {
+        modelAssetPath:
+          "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+        delegate
+      },
+      runningMode: "VIDEO",
+      numFaces: 1
+    });
+  const createHandLandmarker = (delegate) =>
+    HandLandmarker.createFromOptions(filesets, {
+      baseOptions: {
+        modelAssetPath:
+          "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+        delegate
+      },
+      runningMode: "VIDEO",
+      numHands: 2
+    });
+
+  try { faceLandmarker = await createFaceLandmarker("GPU"); }
+  catch { faceLandmarker = await createFaceLandmarker("CPU"); }
+  try { handLandmarker = await createHandLandmarker("GPU"); }
+  catch { handLandmarker = await createHandLandmarker("CPU"); }
+  modelsReady = true;
+}
+
+// Fails soft: if models can't load, the preview simply never starts —
+// the settings form and save flow work regardless.
+const modelsPromise = loadModels().catch(err => {
+  console.error('staff preview: model loading failed:', err);
+  return null;
+});
+
+const gestureImages = { Right: null, Left: null };
+
+function loadGestureImage(label, url) {
+  if (!url) { gestureImages[label] = null; return; }
+  const img = new Image();
+  const state = { url, loaded: false, failed: false, img };
+  img.onload = () => { state.loaded = true; };
+  img.onerror = () => { state.failed = true; };
+  img.src = url;
+  gestureImages[label] = state;
+}
+
+function tracePath(c, landmarks, indices) {
+  const vw = previewVideo.videoWidth, vh = previewVideo.videoHeight;
+  c.beginPath();
+  indices.forEach((idx, i) => {
+    const x = landmarks[idx].x * vw, y = landmarks[idx].y * vh;
+    i === 0 ? c.moveTo(x, y) : c.lineTo(x, y);
+  });
+  c.closePath();
+}
+
+function buildMask(faces) {
+  mctx.clearRect(0, 0, maskCanvas.width, maskCanvas.height);
+  for (const landmarks of faces) {
+    mctx.filter = 'blur(12px)';
+    mctx.fillStyle = '#fff';
+    tracePath(mctx, landmarks, FACE_OVAL);
+    mctx.fill();
+    mctx.filter = 'none';
+
+    mctx.globalCompositeOperation = 'destination-out';
+    mctx.filter = 'blur(4px)';
+    for (const loop of [LEFT_EYE, RIGHT_EYE, LIPS]) {
+      tracePath(mctx, landmarks, loop);
+      mctx.fill();
+    }
+    mctx.filter = 'none';
+    mctx.globalCompositeOperation = 'source-over';
+  }
+}
+
+function toScreen(lm, vw, vh, cw, ch) {
+  const scale = Math.max(cw / vw, ch / vh);
+  const offsetX = (cw - vw * scale) / 2;
+  const offsetY = (ch - vh * scale) / 2;
+  return { x: lm.x * vw * scale + offsetX, y: lm.y * vh * scale + offsetY };
+}
+
+function drawFaceWarp(strips, scale, dx, dy) {
+  for (const { y, height, inset, fl, fr, wx0, wx1 } of strips) {
+    const sx = x => dx + x * scale;
+    const dyy = dy + y * scale;
+    const dhh = height * scale + 0.6;
+    pctx.drawImage(compCanvas, wx0, y, fl - wx0, height,
+      sx(wx0), dyy, (fl + inset - wx0) * scale, dhh);
+    pctx.drawImage(compCanvas, fl, y, fr - fl, height,
+      sx(fl + inset), dyy, (fr - fl - 2 * inset) * scale, dhh);
+    pctx.drawImage(compCanvas, fr, y, wx1 - fr, height,
+      sx(fr - inset), dyy, (wx1 - fr + inset) * scale, dhh);
+  }
+}
+
+function drawHeartPath(ctx, cx, cy, size) {
+  const top = cy + size * 0.28;
+  ctx.beginPath();
+  ctx.moveTo(cx, top);
+  ctx.bezierCurveTo(cx, cy, cx - size / 2, cy, cx - size / 2, top);
+  ctx.bezierCurveTo(cx - size / 2, cy + size * 0.65, cx, cy + size * 0.65, cx, cy + size);
+  ctx.bezierCurveTo(cx, cy + size * 0.65, cx + size / 2, cy + size * 0.65, cx + size / 2, top);
+  ctx.bezierCurveTo(cx + size / 2, cy, cx, cy, cx, top);
+  ctx.closePath();
+}
+
+const heartsByHand = { Right: null, Left: null };
+
+function drawHearts() {
+  for (const label of ['Right', 'Left']) {
+    const h = heartsByHand[label];
+    if (!h) continue;
+    const size = Math.max(1, h.size);
+    const graphic = gestureImages[label];
+    pctx.save();
+    pctx.globalAlpha = h.alpha;
+    if (graphic && shouldUseGraphicImage(graphic)) {
+      pctx.drawImage(graphic.img, h.x - size / 2, h.y - size / 2, size, size);
+    } else {
+      pctx.fillStyle = HEART_COLORS[label];
+      drawHeartPath(pctx, h.x, h.y, size);
+      pctx.fill();
+    }
+    pctx.restore();
+  }
+}
+
+let lastVideoTime = -1;
+let latestFaces = [];
+let latestHands = [];
+let latestHandedness = [];
+const handednessHistory = [[], []];
+const geometryHistory = [[], []];
+
+function previewLoop() {
+  if (previewVideo.currentTime !== lastVideoTime) {
+    lastVideoTime = previewVideo.currentTime;
+    try {
+      const faceResult = faceLandmarker.detectForVideo(previewVideo, performance.now());
+      latestFaces = faceResult.faceLandmarks || [];
+    } catch (err) { console.warn('staff preview: face detection skipped:', err); }
+    try {
+      const handResult = handLandmarker.detectForVideo(previewVideo, performance.now());
+      latestHands = handResult.landmarks || [];
+      latestHandedness = handResult.handednesses || [];
+    } catch (err) { console.warn('staff preview: hand detection skipped:', err); }
+  }
+
+  const vw = previewVideo.videoWidth, vh = previewVideo.videoHeight;
+  if (!vw) { requestAnimationFrame(previewLoop); return; }
+
+  previewCanvas.width = previewCanvas.clientWidth;
+  previewCanvas.height = previewCanvas.clientHeight;
+  const scale = Math.max(previewCanvas.width / vw, previewCanvas.height / vh);
+  const dx = (previewCanvas.width - vw * scale) / 2;
+  const dy = (previewCanvas.height - vh * scale) / 2;
+
+  bctx.filter = 'blur(7px)';
+  bctx.drawImage(previewVideo, 0, 0, vw, vh);
+  bctx.filter = 'none';
+
+  buildMask(latestFaces);
+
+  sctx.clearRect(0, 0, vw, vh);
+  sctx.drawImage(blurCanvas, 0, 0);
+  sctx.globalCompositeOperation = 'destination-in';
+  sctx.drawImage(maskCanvas, 0, 0);
+  sctx.globalCompositeOperation = 'source-over';
+
+  const glow = glowInput.value / 100;
+  const smooth = smoothInput.value / 100;
+  cctx.filter = `brightness(${1 + glow * 0.12}) saturate(${1 + glow * 0.15}) contrast(${1 - glow * 0.05})`;
+  cctx.drawImage(previewVideo, 0, 0, vw, vh);
+  cctx.filter = 'none';
+  cctx.globalAlpha = smooth * 0.85;
+  cctx.drawImage(skinCanvas, 0, 0);
+  cctx.globalAlpha = 1;
+
+  pctx.drawImage(compCanvas, dx, dy, vw * scale, vh * scale);
+
+  const vshape = vshapeInput.value / 100;
+  const narrow = narrowInput.value / 100;
+  if (vshape > 0 || narrow > 0) {
+    for (const landmarks of latestFaces) {
+      drawFaceWarp(computeWarpStrips(landmarks, vshape, narrow, vw, vh), scale, dx, dy);
+    }
+  }
+
+  const tips = { Right: null, Left: null };
+  latestHands.forEach((landmarks, i) => {
+    let rawLabel = latestHandedness[i]?.[0]?.categoryName || '';
+    if (HANDEDNESS_FLIPPED) rawLabel = rawLabel === 'Left' ? 'Right' : 'Left';
+
+    const history = handednessHistory[i] || (handednessHistory[i] = []);
+    history.push(rawLabel);
+    if (history.length > HANDEDNESS_WINDOW) history.shift();
+    const label = majorityHandedness(history);
+
+    const rawMatchesGeometry = isMiniHeart(landmarks, vw, vh);
+    const geomHistory = geometryHistory[i] || (geometryHistory[i] = []);
+    geomHistory.push(rawMatchesGeometry);
+    if (geomHistory.length > GEOMETRY_WINDOW) geomHistory.shift();
+    const matchesGeometry = majorityBoolean(geomHistory);
+
+    if ((label === 'Right' || label === 'Left') && matchesGeometry) {
+      const thumbTip = toScreen(landmarks[4], vw, vh, previewCanvas.width, previewCanvas.height);
+      const indexTip = toScreen(landmarks[8], vw, vh, previewCanvas.width, previewCanvas.height);
+      const anchor = thumbTip.y < indexTip.y ? thumbTip : indexTip;
+      const wristPt = toScreen(landmarks[0], vw, vh, previewCanvas.width, previewCanvas.height);
+      const middleMcpPt = toScreen(landmarks[9], vw, vh, previewCanvas.width, previewCanvas.height);
+      const handSpan = Math.hypot(wristPt.x - middleMcpPt.x, wristPt.y - middleMcpPt.y) || 1;
+      tips[label] = {
+        x: anchor.x,
+        y: anchor.y - handSpan * HEART_HEIGHT_MULTIPLIER,
+        size: handSpan * HEART_SIZE_MULTIPLIER
+      };
+    }
+  });
+
+  for (const label of ['Right', 'Left']) {
+    heartsByHand[label] = nextHeartState(heartsByHand[label], {
+      active: tips[label] !== null,
+      x: tips[label]?.x, y: tips[label]?.y, size: tips[label]?.size
+    });
+  }
+  drawHearts();
+
+  requestAnimationFrame(previewLoop);
+}
+
+async function startPreviewCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+    previewStream = stream;
+    previewVideo.srcObject = stream;
+    await previewVideo.play();
+    for (const c of [blurCanvas, maskCanvas, skinCanvas, compCanvas]) {
+      c.width = previewVideo.videoWidth; c.height = previewVideo.videoHeight;
+    }
+    previewCanvas.style.display = 'block';
+    requestAnimationFrame(previewLoop);
+  } catch (err) {
+    console.error('staff preview: camera failed:', err);
+  }
+}
+
+// Courtesy cleanup — staff sessions are short-lived so there's no
+// explicit stop button, but release the camera hardware on tab close
+// the same way the guest page does at true end-of-recording.
+window.addEventListener('beforeunload', () => {
+  if (previewStream) previewStream.getTracks().forEach(t => t.stop());
+});
+
 for (const [key, preset] of Object.entries(OUTPUT_PRESETS)) {
   const option = document.createElement('option');
   option.value = key;
@@ -51,6 +356,8 @@ async function populateForm() {
   narrowInput.value = settings.beautyNarrow;
   narrowVal.textContent = settings.beautyNarrow;
   presetSelect.value = presetKeyFor(settings.outputWidth, settings.outputHeight);
+  loadGestureImage('Left', settings.gestureLeftUrl);
+  loadGestureImage('Right', settings.gestureRightUrl);
 }
 
 smoothInput.addEventListener('input', () => { smoothVal.textContent = smoothInput.value; });
@@ -65,6 +372,8 @@ unlockBtn.addEventListener('click', async () => {
   form.style.display = 'block';
   status.textContent = '';
   await populateForm();
+  await modelsPromise;
+  if (modelsReady) startPreviewCamera();
 });
 
 // Mints a short-lived upload token (proves the passcode) then uploads
