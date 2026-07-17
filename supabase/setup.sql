@@ -95,6 +95,28 @@ using (true);
 -- curious guest", not a real attacker, so this lightweight check is enough
 -- for the MVP -- no real auth system needed.
 
+-- Postgres identifies a function by name + argument types, so once this
+-- function gained a parameter, CREATE OR REPLACE started ADDING an overload
+-- instead of replacing the original. Two same-named functions then make the
+-- bare-name grant/revoke below ambiguous ("function name is not unique"),
+-- and PostgREST can't pick one either. Drop every existing overload first so
+-- exactly one definition survives, no matter which version was applied
+-- before.
+do $$
+declare
+  signature text;
+begin
+  for signature in
+    select oid::regprocedure::text
+    from pg_proc
+    where pronamespace = 'public'::regnamespace
+      and proname = 'update_staff_settings'
+  loop
+    execute 'drop function if exists ' || signature;
+  end loop;
+end;
+$$;
+
 create or replace function public.update_staff_settings(
   p_passcode           text,
   p_output_width       int  default null,
