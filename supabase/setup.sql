@@ -15,8 +15,8 @@ values ('clips', 'clips', false)
 on conflict (id) do nothing;
 
 -- assets: staff-uploaded frame + gesture graphics. PUBLIC READ — every guest
--- phone must be able to fetch these images. Nothing can write to this bucket
--- yet (no Staff Page exists); that comes with a future passcode-gated step.
+-- phone must be able to fetch these images. Writes are token-gated, see
+-- section 4 below.
 insert into storage.buckets (id, name, public)
 values ('assets', 'assets', true)
 on conflict (id) do nothing;
@@ -39,8 +39,7 @@ on storage.objects
 for select
 to anon
 using (bucket_id = 'assets');
--- deliberately no INSERT policy yet -> writes to 'assets' are blocked
--- until the passcode-gated Staff Page upload path is built.
+-- write access to 'assets' is token-gated — see section 4 below.
 
 
 -- ============================================================
@@ -169,6 +168,87 @@ for insert
 to anon
 with check (true);
 -- deliberately no SELECT/UPDATE/DELETE for anon.
+
+-- ============================================================
+-- 4. UPLOAD TOKENS (staff asset uploads — issue #9)
+-- ============================================================
+-- The Staff Page needs to write to the 'assets' bucket (frame + two
+-- gesture graphics), but storage RLS policies can't check a passcode
+-- per request the way update_staff_settings does for the settings
+-- table. Instead: a passcode-checked RPC mints a short-lived token;
+-- the storage write policies below just require ANY unexpired token
+-- to exist. Deliberately not scoped to a specific upload path/session
+-- — simpler to reason about, and matches ADR-0003's threat model
+-- ("curious guest", not an attacker) — see that ADR for alternatives
+-- considered.
+
+create table if not exists public.upload_tokens (
+  token      text primary key default encode(gen_random_bytes(16), 'hex'),
+  expires_at timestamptz not null default now() + interval '10 minutes'
+);
+
+alter table public.upload_tokens enable row level security;
+
+drop policy if exists "anyone can check token validity" on public.upload_tokens;
+create policy "anyone can check token validity"
+on public.upload_tokens
+for select
+to anon
+using (true);
+-- deliberately readable: the assets storage policies below run this
+-- exact SELECT as the uploading (anon) role. No INSERT/UPDATE/DELETE
+-- policy for anon -> only mint_upload_token (security definer) below
+-- ever creates a row.
+
+grant select on public.upload_tokens to anon;
+
+create or replace function public.mint_upload_token(p_passcode text)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_token text;
+begin
+  if not exists (
+    select 1 from public.staff_settings where id = 1 and passcode = p_passcode
+  ) then
+    raise exception 'invalid passcode';
+  end if;
+
+  delete from public.upload_tokens where expires_at < now();
+
+  insert into public.upload_tokens default values
+  returning token into v_token;
+
+  return v_token;
+end;
+$$;
+
+revoke all on function public.mint_upload_token from public;
+grant execute on function public.mint_upload_token to anon;
+
+drop policy if exists "valid token holders can upload assets" on storage.objects;
+create policy "valid token holders can upload assets"
+on storage.objects
+for insert
+to anon
+with check (
+  bucket_id = 'assets'
+  and exists (select 1 from public.upload_tokens where expires_at > now())
+);
+
+drop policy if exists "valid token holders can overwrite assets" on storage.objects;
+create policy "valid token holders can overwrite assets"
+on storage.objects
+for update
+to anon
+using (bucket_id = 'assets')
+with check (
+  bucket_id = 'assets'
+  and exists (select 1 from public.upload_tokens where expires_at > now())
+);
 
 -- ============================================================
 -- Done. Expected result: "Success. No rows returned" in the SQL Editor.
