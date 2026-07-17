@@ -17,12 +17,38 @@
     transform: scaleX(-1); /* selfie mirror */
   }
 
+  #entry {
+    position: absolute; z-index: 10; inset: 0; background: #000;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 18px; color: #fff; text-align: center;
+    padding: 0 24px;
+  }
+  #entry p { margin: 0; font-size: 16px; line-height: 1.5; max-width: 420px; }
+  #nameInput {
+    padding: 12px 18px; font-size: 17px; border-radius: 12px;
+    border: 1px solid #555; background: #111; color: #fff;
+    width: min(80vw, 320px); text-align: center;
+  }
   #startBtn {
-    position: absolute; z-index: 10;
-    top: 50%; left: 50%; transform: translate(-50%,-50%);
     padding: 16px 32px; font-size: 18px; border-radius: 30px;
     border: none; background: #e84393; color: #fff; cursor: pointer;
   }
+
+  #webviewNotice {
+    position: absolute; z-index: 30; inset: 0; background: #000;
+    display: none; flex-direction: column; align-items: center;
+    justify-content: center; gap: 16px; color: #fff; text-align: center;
+    padding: 0 28px; font-size: 17px; line-height: 1.6;
+  }
+
+  #preRoll {
+    position: absolute; z-index: 15; inset: 0;
+    display: none; align-items: center; justify-content: center;
+    color: #fff; font-size: 120px; font-weight: bold;
+    text-shadow: 0 2px 16px rgba(0,0,0,.7); pointer-events: none;
+  }
+
+  #status.warning { color: #ff5252; font-weight: bold; }
 
   #status {
     position: absolute; z-index: 5; top: 16px; width: 100%;
@@ -61,7 +87,24 @@
 
 <video id="video" autoplay playsinline muted></video>
 <canvas id="outCanvas"></canvas>
-<button id="startBtn" disabled>Loading AI models…</button>
+
+<div id="entry">
+  <p>💌 Record a video message for the couple!<br>
+  อัดคลิปวิดีโออวยพรให้บ่าวสาวกันเถอะ</p>
+  <p>Make a finger heart 🫰 while recording to pop hearts on screen.<br>
+  ทำท่ามินิฮาร์ท 🫰 ระหว่างอัดเพื่อให้หัวใจลอยขึ้นมา</p>
+  <input id="nameInput" type="text" placeholder="Your name / ชื่อของคุณ" maxlength="60">
+  <button id="startBtn" disabled>Loading AI models…</button>
+</div>
+
+<div id="webviewNotice">
+  <p>📱 กรุณาเปิดในเบราว์เซอร์</p>
+  <p>แตะเมนู ⋯ หรือ ↗ มุมขวาบน<br>แล้วเลือก "เปิดในเบราว์เซอร์" / "Open in Browser"</p>
+  <p>Please open this page in your browser.<br>
+  Tap the ⋯ or ↗ menu and choose "Open in Browser".</p>
+</div>
+
+<div id="preRoll"></div>
 <div id="status"></div>
 
 <div id="controls">

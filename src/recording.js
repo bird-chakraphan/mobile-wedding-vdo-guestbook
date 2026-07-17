@@ -17,11 +17,21 @@ export function pickMimeType(isSupported, candidates = MIME_CANDIDATES) {
   return candidates.find(isSupported) || '';
 }
 
-// No guest-name entry yet in this slice, so filenames are timestamp-only —
-// the sanitized-guest-name convention (ADR/CONTEXT.md) lands with that step.
-export function buildFilename(mimeType, now = new Date()) {
+// Storage keys must be ASCII-safe, but guests type names in Thai or with
+// emoji — the exact typed name is stored in the clips DB table, and the
+// filename carries whatever survives sanitizing (or "Guest").
+export function sanitizeName(name) {
+  const cleaned = (name || '')
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/[^A-Za-z0-9_-]/g, '')
+    .slice(0, 40);
+  return cleaned || 'Guest';
+}
+
+export function buildFilename(mimeType, now = new Date(), sanitizedName = 'Guest') {
   const ext = (mimeType || '').includes('mp4') ? 'mp4' : 'webm';
-  return `Guest_${now.toISOString().replace(/[:.]/g, '-')}.${ext}`;
+  return `${sanitizedName}_${now.toISOString().replace(/[:.]/g, '-')}.${ext}`;
 }
 
 // Wedding-venue Wi-Fi and phone networks flake; a clip that fails to

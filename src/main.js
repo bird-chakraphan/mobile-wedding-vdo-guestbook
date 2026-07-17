@@ -13,10 +13,17 @@ import { FaceLandmarker, HandLandmarker, FilesetResolver }
   from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 import { supabase } from './supabaseClient.js';
 import { isMiniHeart, majorityHandedness, majorityBoolean } from './gesture.js';
-import { pickMimeType, buildFilename, withRetries } from './recording.js';
+import { pickMimeType, buildFilename, sanitizeName, withRetries } from './recording.js';
 import { nextHeartState } from './heartAnimation.js';
+import { loadSettings, SETTINGS_DEFAULTS } from './settings.js';
+import { preRollRemaining, recordingStatus } from './countdown.js';
+import { isInAppWebview } from './webview.js';
 
-const RECORD_LIMIT_SECONDS = 15;
+// Staff-configured values; refreshed from the DB during init (defaults
+// keep everything working if the fetch fails).
+let settings = { ...SETTINGS_DEFAULTS };
+
+const PRE_ROLL_SECONDS = 5;
 
 // Known risk (CONTEXT.md / TESTED-LEARNINGS.md): MediaPipe's handedness
 // label may be swapped relative to what the guest sees in the mirrored
@@ -42,6 +49,10 @@ const HAND_BONES = [
 const video   = document.getElementById('video');
 const out     = document.getElementById('outCanvas');
 const octx    = out.getContext('2d');
+const entry   = document.getElementById('entry');
+const nameInput = document.getElementById('nameInput');
+const webviewNotice = document.getElementById('webviewNotice');
+const preRollEl = document.getElementById('preRoll');
 const startBtn = document.getElementById('startBtn');
 const status  = document.getElementById('status');
 const controls = document.getElementById('controls');
@@ -72,9 +83,6 @@ const LEFT_EYE  = [33,246,161,160,159,158,157,173,133,155,154,153,145,144,163,7]
 const RIGHT_EYE = [263,466,388,387,386,385,384,398,362,382,381,380,374,373,390,249];
 const LIPS      = [61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,181,91,146];
 
-// hardcoded defaults from the prototype's sliders — no Staff Page yet
-const SMOOTH = 0.60;
-const GLOW = 0.30;
 
 /* ---------- load AI models (GPU -> CPU fallback) ----------
    Wrapped in an async function rather than top-level await: top-level
@@ -117,13 +125,23 @@ async function loadModels() {
   startBtn.textContent = "Start camera";
 }
 
-loadModels().catch(err => {
-  console.error('model loading failed:', err);
-  startBtn.textContent = 'Loading failed — check internet & reload';
-});
+// In-app webviews (LINE/IG/FB) break camera access — show the bilingual
+// "open in browser" screen and load nothing else.
+const inWebview = isInAppWebview(navigator.userAgent);
+if (inWebview) {
+  webviewNotice.style.display = 'flex';
+  entry.style.display = 'none';
+} else {
+  loadSettings(supabase).then(loaded => { settings = loaded; });
+  loadModels().catch(err => {
+    console.error('model loading failed:', err);
+    startBtn.textContent = 'Loading failed — check internet & reload';
+  });
+}
 
 /* ---------- camera + mic ---------- */
 let micTrack = null;
+let guestName = '';
 
 startBtn.addEventListener('click', async () => {
   const stream = await navigator.mediaDevices.getUserMedia({
@@ -133,12 +151,13 @@ startBtn.addEventListener('click', async () => {
   video.srcObject = stream;
   await video.play();
   micTrack = stream.getAudioTracks()[0];
+  guestName = nameInput.value;
 
   for (const c of [blurCanvas, maskCanvas, skinCanvas, compCanvas]) {
     c.width = video.videoWidth; c.height = video.videoHeight;
   }
 
-  startBtn.remove();
+  entry.remove();
   controls.style.display = 'flex';
   requestAnimationFrame(loop);
 });
@@ -301,10 +320,12 @@ function loop() {
   sctx.drawImage(maskCanvas, 0, 0);
   sctx.globalCompositeOperation = 'source-over';
 
-  cctx.filter = `brightness(${1 + GLOW * 0.12}) saturate(${1 + GLOW * 0.15}) contrast(${1 - GLOW * 0.05})`;
+  const glow = settings.beautyGlow / 100;
+  const smooth = settings.beautySmooth / 100;
+  cctx.filter = `brightness(${1 + glow * 0.12}) saturate(${1 + glow * 0.15}) contrast(${1 - glow * 0.05})`;
   cctx.drawImage(video, 0, 0, vw, vh);
   cctx.filter = 'none';
-  cctx.globalAlpha = SMOOTH * 0.85;
+  cctx.globalAlpha = smooth * 0.85;
   cctx.drawImage(skinCanvas, 0, 0);
   cctx.globalAlpha = 1;
 
@@ -387,9 +408,34 @@ let mimeType = '';
 let recordTimeout = null;
 let elapsedInterval = null;
 
-recordBtn.addEventListener('click', () => {
-  if (!micTrack) return;
+let preRolling = false;
 
+recordBtn.addEventListener('click', () => {
+  if (!micTrack || recording || preRolling) return;
+  runPreRoll();
+});
+
+// 5-second on-screen countdown so the guest can get ready — recording
+// only starts when it hits zero.
+function runPreRoll() {
+  preRolling = true;
+  controls.style.display = 'none';
+  preRollEl.style.display = 'flex';
+  preRollEl.textContent = String(PRE_ROLL_SECONDS);
+  const started = performance.now();
+  const tick = setInterval(() => {
+    const remaining = preRollRemaining(performance.now() - started, PRE_ROLL_SECONDS);
+    preRollEl.textContent = remaining > 0 ? String(remaining) : '';
+    if (remaining <= 0) {
+      clearInterval(tick);
+      preRollEl.style.display = 'none';
+      preRolling = false;
+      beginRecording();
+    }
+  }, 100);
+}
+
+function beginRecording() {
   mimeType = pickMimeType(MediaRecorder.isTypeSupported.bind(MediaRecorder));
   const canvasStream = out.captureStream(30);
   const combined = new MediaStream([
@@ -404,17 +450,19 @@ recordBtn.addEventListener('click', () => {
   mediaRecorder.start();
 
   recording = true;
+  controls.style.display = 'flex';
   recordBtn.style.display = 'none';
   stopBtn.style.display = 'inline-block';
 
   const startTime = performance.now();
   elapsedInterval = setInterval(() => {
-    const elapsed = Math.floor((performance.now() - startTime) / 1000);
-    status.textContent = `Recording… ${elapsed}s / ${RECORD_LIMIT_SECONDS}s`;
+    const rec = recordingStatus(performance.now() - startTime, settings.timeLimitSeconds);
+    status.textContent = `Recording… ${rec.remainingSeconds}s left`;
+    status.classList.toggle('warning', rec.warning);
   }, 250);
 
-  recordTimeout = setTimeout(stopRecording, RECORD_LIMIT_SECONDS * 1000);
-});
+  recordTimeout = setTimeout(stopRecording, settings.timeLimitSeconds * 1000);
+}
 
 stopBtn.addEventListener('click', stopRecording);
 
@@ -422,13 +470,14 @@ function stopRecording() {
   if (!recording) return;
   clearTimeout(recordTimeout);
   clearInterval(elapsedInterval);
+  status.classList.remove('warning');
   recording = false;
   mediaRecorder.stop();
 }
 
 function onRecordingStop() {
   const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
-  const filename = buildFilename(mimeType);
+  const filename = buildFilename(mimeType, new Date(), sanitizeName(guestName));
   const url = URL.createObjectURL(blob);
 
   previewVideo.src = url;
@@ -481,6 +530,16 @@ async function uploadClip(blob, filename) {
       ? `Upload failed after 3 tries (${error.message}) — your download still works, please save it.`
       : 'Uploaded ✓ — the couple will get this clip.';
     if (error) console.error('upload failed:', error.message);
+
+    if (!error) {
+      // record the guest's name EXACTLY as typed (Thai/emoji intact) —
+      // the storage filename above had to be sanitized to ASCII
+      const { error: dbError } = await supabase.from('clips').insert({
+        guest_name: guestName.trim() || 'Guest',
+        storage_path: filename
+      });
+      if (dbError) console.error('clip record insert failed:', dbError.message);
+    }
   } catch (err) {
     uploadStatus.textContent = `Upload failed (${err.message}) — your download still works, please save it.`;
     console.error('upload failed:', err);

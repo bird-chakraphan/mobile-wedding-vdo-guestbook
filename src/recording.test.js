@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pickMimeType, buildFilename, withRetries, MIME_CANDIDATES } from './recording.js';
+import { pickMimeType, buildFilename, sanitizeName, withRetries, MIME_CANDIDATES } from './recording.js';
 
 describe('pickMimeType', () => {
   it('prefers mp4 (H.264) over webm whenever the device can record it — mp4 is the only format phone photo galleries accept', () => {
@@ -24,6 +24,50 @@ describe('buildFilename', () => {
   });
 
   it('uses a .mp4 extension for iOS Safari mp4 recordings', () => {
+    const name = buildFilename('video/mp4', new Date('2026-07-16T10:00:00Z'));
+    expect(name).toMatch(/^Guest_.*\.mp4$/);
+  });
+});
+
+describe('sanitizeName', () => {
+  it('keeps ASCII letters, digits, dashes and underscores', () => {
+    expect(sanitizeName('Bird_Chakraphan-99')).toBe('Bird_Chakraphan-99');
+  });
+
+  it('turns spaces into dashes', () => {
+    expect(sanitizeName('Bird Chakraphan')).toBe('Bird-Chakraphan');
+  });
+
+  it('falls back to Guest for a Thai-only name (exact name is stored separately in the DB)', () => {
+    expect(sanitizeName('เบิร์ด')).toBe('Guest');
+  });
+
+  it('keeps the ASCII part of a mixed Thai/English name', () => {
+    expect(sanitizeName('Bird เบิร์ด')).toBe('Bird-');
+  });
+
+  it('strips emoji and symbols', () => {
+    expect(sanitizeName('B🎉i/r\\d!')).toBe('Bird');
+  });
+
+  it('falls back to Guest for empty or whitespace-only input', () => {
+    expect(sanitizeName('')).toBe('Guest');
+    expect(sanitizeName('   ')).toBe('Guest');
+    expect(sanitizeName(undefined)).toBe('Guest');
+  });
+
+  it('caps very long names', () => {
+    expect(sanitizeName('a'.repeat(200)).length).toBeLessThanOrEqual(40);
+  });
+});
+
+describe('buildFilename with a guest name', () => {
+  it('leads with the sanitized guest name', () => {
+    const name = buildFilename('video/mp4', new Date('2026-07-16T10:00:00Z'), 'Bird-Chakraphan');
+    expect(name).toMatch(/^Bird-Chakraphan_.*\.mp4$/);
+  });
+
+  it('still defaults to Guest when no name is given', () => {
     const name = buildFilename('video/mp4', new Date('2026-07-16T10:00:00Z'));
     expect(name).toMatch(/^Guest_.*\.mp4$/);
   });
