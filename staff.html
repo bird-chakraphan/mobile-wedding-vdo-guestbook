@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wedding VDO Guest Book — Staff</title>
+<style>
+  body { margin: 0; min-height: 100vh; background: #111; color: #fff; font-family: sans-serif;
+    display: flex; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; }
+  #panel { width: 100%; max-width: 420px; }
+  h1 { font-size: 20px; margin-bottom: 24px; }
+  label { display: block; margin-bottom: 16px; font-size: 14px; }
+  label span { display: block; margin-bottom: 6px; color: #aaa; }
+  input[type=text], input[type=password], input[type=number], select {
+    width: 100%; box-sizing: border-box; padding: 10px 12px; font-size: 15px;
+    border-radius: 8px; border: 1px solid #444; background: #1a1a1a; color: #fff;
+  }
+  input[type=range] { width: 100%; accent-color: #e84393; }
+  button {
+    padding: 12px 24px; font-size: 15px; border-radius: 10px; border: none;
+    background: #e84393; color: #fff; cursor: pointer; width: 100%;
+  }
+  #status { margin-top: 14px; font-size: 14px; min-height: 20px; }
+  #settingsForm { display: none; }
+</style>
+</head>
+<body>
+
+<div id="panel">
+  <h1>Staff settings</h1>
+
+  <div id="passcodeGate">
+    <label><span>Passcode</span>
+      <input id="passcodeInput" type="password" autocomplete="off">
+    </label>
+    <button id="unlockBtn">Enter</button>
+  </div>
+
+  <form id="settingsForm">
+    <label><span>Recording time limit (seconds)</span>
+      <input id="timeLimitInput" type="number" min="10" max="300">
+    </label>
+    <label><span>Skin smoothing: <span id="smoothVal"></span></span>
+      <input id="smoothInput" type="range" min="0" max="100">
+    </label>
+    <label><span>Glow: <span id="glowVal"></span></span>
+      <input id="glowInput" type="range" min="0" max="100">
+    </label>
+    <label><span>Output size</span>
+      <select id="presetSelect"></select>
+    </label>
+    <button id="saveBtn" type="submit">Save</button>
+  </form>
+
+  <div id="status"></div>
+</div>
+
+<script type="module" src="/src/staff.js"></script>
+</body>
+</html>
