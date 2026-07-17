@@ -10,7 +10,10 @@ describe('buildSettingsPayload', () => {
       beautyVshape: 35,
       beautyNarrow: 15,
       outputWidth: 720,
-      outputHeight: 1280
+      outputHeight: 1280,
+      frameUrl: 'https://example.com/frame.png',
+      gestureLeftUrl: 'https://example.com/left.png',
+      gestureRightUrl: 'https://example.com/right.png'
     });
     expect(payload).toEqual({
       p_passcode: 'changeme',
@@ -20,7 +23,25 @@ describe('buildSettingsPayload', () => {
       p_beauty_vshape: 35,
       p_beauty_narrow: 15,
       p_output_width: 720,
-      p_output_height: 1280
+      p_output_height: 1280,
+      p_frame_url: 'https://example.com/frame.png',
+      p_gesture_left_url: 'https://example.com/left.png',
+      p_gesture_right_url: 'https://example.com/right.png'
     });
+  });
+
+  it('leaves the asset URL params undefined when no new asset was uploaded, so the RPC keeps the existing value', () => {
+    const payload = buildSettingsPayload('changeme', {
+      timeLimitSeconds: 45,
+      beautySmooth: 70,
+      beautyGlow: 20,
+      beautyVshape: 35,
+      beautyNarrow: 15,
+      outputWidth: 720,
+      outputHeight: 1280
+    });
+    expect(payload.p_frame_url).toBeUndefined();
+    expect(payload.p_gesture_left_url).toBeUndefined();
+    expect(payload.p_gesture_right_url).toBeUndefined();
   });
 });

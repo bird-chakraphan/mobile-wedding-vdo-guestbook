@@ -12,6 +12,9 @@ export function buildSettingsPayload(passcode, values) {
     p_beauty_vshape: values.beautyVshape,
     p_beauty_narrow: values.beautyNarrow,
     p_output_width: values.outputWidth,
-    p_output_height: values.outputHeight
+    p_output_height: values.outputHeight,
+    p_frame_url: values.frameUrl,
+    p_gesture_left_url: values.gestureLeftUrl,
+    p_gesture_right_url: values.gestureRightUrl
   };
 }
