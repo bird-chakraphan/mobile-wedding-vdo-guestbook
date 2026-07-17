@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { isMiniHeart, isFingerCurled, majorityHandedness, majorityBoolean } from './gesture.js';
+import {
+  isMiniHeart, isFingerCurled, isFingerExtended, isOpenPalm, isPointingUp, isPeace,
+  detectGesture, gesturePlacement, majorityHandedness, majorityBoolean
+} from './gesture.js';
 
 // 21-point MediaPipe hand landmark array, all zeroed except the indices
 // each test cares about (only those feed our geometry checks).
@@ -145,6 +148,108 @@ describe('isFingerCurled', () => {
       12: { x: 0.5, y: 0.1 }, // tip far beyond the PIP — extended finger
     });
     expect(isFingerCurled(lm, 12, 10, 1, 1)).toBe(false);
+  });
+});
+
+// Fingers extended straight up (tips far above their PIPs), wrist at bottom.
+const OPEN_PALM = {
+  0: { x: 0.5, y: 0.9 },   // wrist
+  9: { x: 0.5, y: 0.6 },   // middle MCP (hand span)
+  5: { x: 0.4, y: 0.6 }, 13: { x: 0.6, y: 0.6 }, 17: { x: 0.65, y: 0.62 }, // MCPs
+  6: { x: 0.45, y: 0.55 }, 8: { x: 0.45, y: 0.2 },   // index PIP/tip
+  10: { x: 0.5, y: 0.55 }, 12: { x: 0.5, y: 0.15 },  // middle
+  14: { x: 0.55, y: 0.55 }, 16: { x: 0.55, y: 0.2 }, // ring
+  18: { x: 0.6, y: 0.55 }, 20: { x: 0.6, y: 0.25 },  // pinky
+};
+// Index up, the other three folded back toward the wrist.
+const POINT_UP = {
+  0: { x: 0.5, y: 0.9 }, 9: { x: 0.5, y: 0.6 },
+  6: { x: 0.5, y: 0.55 }, 8: { x: 0.5, y: 0.15 },    // index extended
+  10: { x: 0.5, y: 0.55 }, 12: { x: 0.5, y: 0.8 },   // middle curled
+  14: { x: 0.5, y: 0.55 }, 16: { x: 0.5, y: 0.8 },   // ring curled
+  18: { x: 0.5, y: 0.55 }, 20: { x: 0.5, y: 0.8 },   // pinky curled
+};
+// Index + middle up, ring + pinky folded.
+const PEACE = {
+  0: { x: 0.5, y: 0.9 }, 9: { x: 0.5, y: 0.6 },
+  6: { x: 0.45, y: 0.55 }, 8: { x: 0.42, y: 0.15 },  // index extended
+  10: { x: 0.55, y: 0.55 }, 12: { x: 0.58, y: 0.15 },// middle extended
+  14: { x: 0.5, y: 0.55 }, 16: { x: 0.5, y: 0.8 },   // ring curled
+  18: { x: 0.5, y: 0.55 }, 20: { x: 0.5, y: 0.8 },   // pinky curled
+};
+
+describe('isFingerExtended', () => {
+  it('is true when the tip reaches well past its PIP joint', () => {
+    const lm = landmarks({ 0: { x: 0.5, y: 0.9 }, 6: { x: 0.5, y: 0.55 }, 8: { x: 0.5, y: 0.15 } });
+    expect(isFingerExtended(lm, 8, 6, 1, 1)).toBe(true);
+  });
+  it('is false for a folded finger whose tip sits near the PIP', () => {
+    const lm = landmarks({ 0: { x: 0.5, y: 0.9 }, 6: { x: 0.5, y: 0.55 }, 8: { x: 0.5, y: 0.6 } });
+    expect(isFingerExtended(lm, 8, 6, 1, 1)).toBe(false);
+  });
+});
+
+describe('isOpenPalm', () => {
+  it('detects all four fingers extended', () => {
+    expect(isOpenPalm(landmarks(OPEN_PALM), 1, 1)).toBe(true);
+  });
+  it('rejects a pointing hand (only one finger up)', () => {
+    expect(isOpenPalm(landmarks(POINT_UP), 1, 1)).toBe(false);
+  });
+});
+
+describe('isPointingUp', () => {
+  it('detects one finger up with the rest curled', () => {
+    expect(isPointingUp(landmarks(POINT_UP), 1, 1)).toBe(true);
+  });
+  it('rejects an open palm', () => {
+    expect(isPointingUp(landmarks(OPEN_PALM), 1, 1)).toBe(false);
+  });
+});
+
+describe('isPeace', () => {
+  it('detects two fingers up with ring and pinky curled', () => {
+    expect(isPeace(landmarks(PEACE), 1, 1)).toBe(true);
+  });
+  it('rejects a single pointing finger', () => {
+    expect(isPeace(landmarks(POINT_UP), 1, 1)).toBe(false);
+  });
+  it('rejects an open palm (ring/pinky not curled)', () => {
+    expect(isPeace(landmarks(OPEN_PALM), 1, 1)).toBe(false);
+  });
+});
+
+describe('detectGesture', () => {
+  it('dispatches to the selected gesture detector', () => {
+    expect(detectGesture('open-palm', landmarks(OPEN_PALM), 1, 1)).toBe(true);
+    expect(detectGesture('point-up', landmarks(POINT_UP), 1, 1)).toBe(true);
+    expect(detectGesture('peace', landmarks(PEACE), 1, 1)).toBe(true);
+  });
+  it('falls back to the mini heart for an unknown type', () => {
+    expect(detectGesture('nonsense', landmarks(OPEN_PALM), 1, 1)).toBe(false);
+  });
+});
+
+describe('gesturePlacement', () => {
+  it('anchors the pointing graphic above the index fingertip', () => {
+    // vw=vh=100: wrist (50,90), middleMcp (50,60) -> handSpan 30.
+    const p = gesturePlacement('point-up', landmarks(POINT_UP), 100, 100);
+    expect(p.x).toBeCloseTo(50, 5);       // index tip x
+    expect(p.y).toBeCloseTo(15 - 33, 5);  // tip y (15) lifted by handSpan*1.1
+    expect(p.size).toBeCloseTo(30 * 0.7, 5);
+  });
+
+  it('centres the open-palm graphic on the palm and sizes it to the hand', () => {
+    const p = gesturePlacement('open-palm', landmarks(OPEN_PALM), 100, 100);
+    // centroid of wrist + 4 MCPs (5,9,13,17): xs .5,.4,.5,.6,.65 -> .53; ys .9,.6,.6,.6,.62 -> .664
+    expect(p.x).toBeCloseTo(53, 0);
+    expect(p.y).toBeCloseTo(66.4, 0);
+    expect(p.size).toBeCloseTo(30 * 1.7, 5);
+  });
+
+  it('places the peace graphic above the midpoint of the two raised fingers', () => {
+    const p = gesturePlacement('peace', landmarks(PEACE), 100, 100);
+    expect(p.x).toBeCloseTo((42 + 58) / 2, 5); // midpoint of index/middle tips
   });
 });
 

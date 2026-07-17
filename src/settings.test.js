@@ -26,6 +26,8 @@ describe('loadSettings', () => {
         beauty_narrow: 25,
         output_width: 720,
         output_height: 1280,
+        gesture_type: 'peace',
+        gesture_scale: 150,
         frame_url: 'https://example.com/frame.png',
         gesture_left_url: null,
         gesture_right_url: 'https://example.com/right.png'
@@ -38,6 +40,8 @@ describe('loadSettings', () => {
     expect(settings.beautyGlow).toBe(10);
     expect(settings.beautyVshape).toBe(40);
     expect(settings.beautyNarrow).toBe(25);
+    expect(settings.gestureType).toBe('peace');
+    expect(settings.gestureScale).toBe(150);
     expect(settings.outputWidth).toBe(720);
     expect(settings.frameUrl).toBe('https://example.com/frame.png');
     expect(settings.gestureLeftUrl).toBeNull();
@@ -64,6 +68,28 @@ describe('loadSettings', () => {
     expect(settings).toEqual(SETTINGS_DEFAULTS);
   });
 
+  it('falls back to base columns when a newer column is missing (migration not applied yet)', async () => {
+    // Errors on any select naming gesture_type; succeeds on the base columns.
+    const client = {
+      from: () => ({
+        select: (cols) => ({
+          eq: () => ({
+            single: () => Promise.resolve(
+              cols.includes('gesture_type')
+                ? { data: null, error: { code: '42703', message: 'column staff_settings.gesture_type does not exist' } }
+                : { data: { beauty_smooth: 25, frame_url: 'https://example.com/frame.png' }, error: null }
+            )
+          })
+        })
+      })
+    };
+    const settings = await loadSettings(client);
+    expect(settings.beautySmooth).toBe(25);                     // real value survives
+    expect(settings.frameUrl).toBe('https://example.com/frame.png');
+    expect(settings.gestureType).toBe(SETTINGS_DEFAULTS.gestureType); // new field defaults
+    expect(settings.gestureScale).toBe(SETTINGS_DEFAULTS.gestureScale);
+  });
+
   it('fills defaults for individual missing columns', async () => {
     const client = mockClient({ data: { time_limit_seconds: 30 }, error: null });
     const settings = await loadSettings(client);
@@ -71,5 +97,7 @@ describe('loadSettings', () => {
     expect(settings.beautySmooth).toBe(SETTINGS_DEFAULTS.beautySmooth);
     expect(settings.beautyVshape).toBe(SETTINGS_DEFAULTS.beautyVshape);
     expect(settings.beautyNarrow).toBe(SETTINGS_DEFAULTS.beautyNarrow);
+    expect(settings.gestureType).toBe(SETTINGS_DEFAULTS.gestureType);
+    expect(settings.gestureScale).toBe(SETTINGS_DEFAULTS.gestureScale);
   });
 });

@@ -11,6 +11,8 @@ describe('buildSettingsPayload', () => {
       beautyNarrow: 15,
       outputWidth: 720,
       outputHeight: 1280,
+      gestureType: 'open-palm',
+      gestureScale: 120,
       frameUrl: 'https://example.com/frame.png',
       gestureLeftUrl: 'https://example.com/left.png',
       gestureRightUrl: 'https://example.com/right.png'
@@ -24,6 +26,8 @@ describe('buildSettingsPayload', () => {
       p_beauty_narrow: 15,
       p_output_width: 720,
       p_output_height: 1280,
+      p_gesture_type: 'open-palm',
+      p_gesture_scale: 120,
       p_frame_url: 'https://example.com/frame.png',
       p_gesture_left_url: 'https://example.com/left.png',
       p_gesture_right_url: 'https://example.com/right.png'

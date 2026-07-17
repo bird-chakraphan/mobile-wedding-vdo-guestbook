@@ -4,7 +4,7 @@ import { supabase } from './supabaseClient.js';
 import { loadSettings } from './settings.js';
 import { OUTPUT_PRESETS, presetKeyFor } from './outputPresets.js';
 import { buildSettingsPayload } from './staffSettingsForm.js';
-import { isMiniHeart, majorityHandedness, majorityBoolean } from './gesture.js';
+import { detectGesture, gesturePlacement, majorityHandedness, majorityBoolean, GESTURE_OPTIONS } from './gesture.js';
 import { nextHeartState } from './heartAnimation.js';
 import { computeWarpStrips } from './faceWarp.js';
 import { shouldUseGraphicImage } from './gestureGraphic.js';
@@ -25,6 +25,9 @@ const vshapeVal = document.getElementById('vshapeVal');
 const narrowInput = document.getElementById('narrowInput');
 const narrowVal = document.getElementById('narrowVal');
 const presetSelect = document.getElementById('presetSelect');
+const gestureTypeSelect = document.getElementById('gestureTypeSelect');
+const gestureScaleInput = document.getElementById('gestureScaleInput');
+const gestureScaleVal = document.getElementById('gestureScaleVal');
 const status = document.getElementById('status');
 
 // One entry per uploadable asset, tying its file input to a fixed slot
@@ -130,8 +133,6 @@ const LIPS      = [61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,1
 const HANDEDNESS_FLIPPED = false;
 const HANDEDNESS_WINDOW = 8;
 const GEOMETRY_WINDOW = 5;
-const HEART_HEIGHT_MULTIPLIER = 1.1;
-const HEART_SIZE_MULTIPLIER = 0.5;
 const HEART_COLORS = { Right: '#ff3355', Left: '#ff9ecb' };
 
 let faceLandmarker, handLandmarker, modelsReady = false;
@@ -393,23 +394,21 @@ function previewLoop() {
     if (history.length > HANDEDNESS_WINDOW) history.shift();
     const label = majorityHandedness(history);
 
-    const rawMatchesGeometry = isMiniHeart(landmarks, vw, vh);
+    // Gesture + graphic size follow the LIVE form controls so the preview
+    // reflects unsaved changes.
+    const gestureType = gestureTypeSelect.value;
+    const rawMatchesGeometry = detectGesture(gestureType, landmarks, vw, vh);
     const geomHistory = geometryHistory[i] || (geometryHistory[i] = []);
     geomHistory.push(rawMatchesGeometry);
     if (geomHistory.length > GEOMETRY_WINDOW) geomHistory.shift();
     const matchesGeometry = majorityBoolean(geomHistory);
 
     if ((label === 'Right' || label === 'Left') && matchesGeometry) {
-      const thumbTip = toScreen(landmarks[4], vw, vh, previewCanvas.width, previewCanvas.height);
-      const indexTip = toScreen(landmarks[8], vw, vh, previewCanvas.width, previewCanvas.height);
-      const anchor = thumbTip.y < indexTip.y ? thumbTip : indexTip;
-      const wristPt = toScreen(landmarks[0], vw, vh, previewCanvas.width, previewCanvas.height);
-      const middleMcpPt = toScreen(landmarks[9], vw, vh, previewCanvas.width, previewCanvas.height);
-      const handSpan = Math.hypot(wristPt.x - middleMcpPt.x, wristPt.y - middleMcpPt.y) || 1;
+      const p = gesturePlacement(gestureType, landmarks, vw, vh);
       tips[label] = {
-        x: anchor.x,
-        y: anchor.y - handSpan * HEART_HEIGHT_MULTIPLIER,
-        size: handSpan * HEART_SIZE_MULTIPLIER
+        x: dx + p.x * scale,
+        y: dy + p.y * scale,
+        size: p.size * scale * (Number(gestureScaleInput.value) / 100)
       };
     }
 
@@ -461,6 +460,13 @@ for (const [key, preset] of Object.entries(OUTPUT_PRESETS)) {
   presetSelect.appendChild(option);
 }
 
+for (const { value, label } of GESTURE_OPTIONS) {
+  const option = document.createElement('option');
+  option.value = value;
+  option.textContent = label;
+  gestureTypeSelect.appendChild(option);
+}
+
 let passcode = '';
 
 async function populateForm() {
@@ -475,6 +481,9 @@ async function populateForm() {
   narrowInput.value = settings.beautyNarrow;
   narrowVal.textContent = settings.beautyNarrow;
   presetSelect.value = presetKeyFor(settings.outputWidth, settings.outputHeight);
+  gestureTypeSelect.value = settings.gestureType;
+  gestureScaleInput.value = settings.gestureScale;
+  gestureScaleVal.textContent = settings.gestureScale;
 
   // Drive the live preview and show each asset's current upload (with its
   // Remove button) or hide the row when nothing is set yet.
@@ -492,6 +501,7 @@ smoothInput.addEventListener('input', () => { smoothVal.textContent = smoothInpu
 glowInput.addEventListener('input', () => { glowVal.textContent = glowInput.value; });
 vshapeInput.addEventListener('input', () => { vshapeVal.textContent = vshapeInput.value; });
 narrowInput.addEventListener('input', () => { narrowVal.textContent = narrowInput.value; });
+gestureScaleInput.addEventListener('input', () => { gestureScaleVal.textContent = gestureScaleInput.value; });
 
 viewToggle.addEventListener('click', () => {
   debugView = !debugView;
@@ -560,6 +570,8 @@ form.addEventListener('submit', async (e) => {
     beautyNarrow: Number(narrowInput.value),
     outputWidth: preset.width,
     outputHeight: preset.height,
+    gestureType: gestureTypeSelect.value,
+    gestureScale: Number(gestureScaleInput.value),
     ...assetChanges
   });
 

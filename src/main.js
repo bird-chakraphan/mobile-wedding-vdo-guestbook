@@ -12,7 +12,7 @@
 import { FaceLandmarker, HandLandmarker, FilesetResolver }
   from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
 import { supabase } from './supabaseClient.js';
-import { isMiniHeart, majorityHandedness, majorityBoolean } from './gesture.js';
+import { detectGesture, gesturePlacement, majorityHandedness, majorityBoolean } from './gesture.js';
 import { pickMimeType, buildFilename, sanitizeName, withRetries } from './recording.js';
 import { nextHeartState } from './heartAnimation.js';
 import { computeWarpStrips } from './faceWarp.js';
@@ -385,12 +385,6 @@ const handednessHistory = [[], []];
 const GEOMETRY_WINDOW = 5;
 const geometryHistory = [[], []];
 
-// Heart placement/sizing, as multiples of the hand's own on-screen size
-// (wrist-to-middle-knuckle span) — scales correctly whether the hand is
-// close to the camera or far, on any screen size.
-const HEART_HEIGHT_MULTIPLIER = 1.1;
-const HEART_SIZE_MULTIPLIER = 0.5;
-
 function loop() {
   if (video.currentTime !== lastVideoTime) {
     lastVideoTime = video.currentTime;
@@ -470,23 +464,20 @@ function loop() {
     if (label === 'Right') rightHandSeen = true;
     if (label === 'Left') leftHandSeen = true;
 
-    const rawMatchesGeometry = isMiniHeart(landmarks, vw, vh);
+    const rawMatchesGeometry = detectGesture(settings.gestureType, landmarks, vw, vh);
     const geomHistory = geometryHistory[i] || (geometryHistory[i] = []);
     geomHistory.push(rawMatchesGeometry);
     if (geomHistory.length > GEOMETRY_WINDOW) geomHistory.shift();
     const matchesGeometry = majorityBoolean(geomHistory);
 
     if ((label === 'Right' || label === 'Left') && matchesGeometry) {
-      const thumbTip = toScreen(landmarks[4], vw, vh, out.width, out.height);
-      const indexTip = toScreen(landmarks[8], vw, vh, out.width, out.height);
-      const anchor = thumbTip.y < indexTip.y ? thumbTip : indexTip; // whichever finger is higher
-      const wristPt = toScreen(landmarks[0], vw, vh, out.width, out.height);
-      const middleMcpPt = toScreen(landmarks[9], vw, vh, out.width, out.height);
-      const handSpan = Math.hypot(wristPt.x - middleMcpPt.x, wristPt.y - middleMcpPt.y) || 1;
+      // Placement is computed in video pixels (gesture.js) and mapped into
+      // the output box here via the same cover transform as the frame.
+      const p = gesturePlacement(settings.gestureType, landmarks, vw, vh);
       tips[label] = {
-        x: anchor.x,
-        y: anchor.y - handSpan * HEART_HEIGHT_MULTIPLIER,
-        size: handSpan * HEART_SIZE_MULTIPLIER
+        x: dx + p.x * scale,
+        y: dy + p.y * scale,
+        size: p.size * scale * (settings.gestureScale / 100)
       };
     }
 
@@ -507,7 +498,7 @@ function loop() {
 
   const gestureActive = tips.Right !== null || tips.Left !== null;
   if (!recording) {
-    let msg = 'Show a finger heart 🫰 with either hand';
+    let msg = 'Make your hand gesture to pop a graphic ✨';
     if (rightHandSeen || leftHandSeen) {
       msg += ` — hands seen: ${[rightHandSeen && 'Right', leftHandSeen && 'Left'].filter(Boolean).join(', ')}`;
     }

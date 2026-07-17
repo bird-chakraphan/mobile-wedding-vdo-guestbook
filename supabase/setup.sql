@@ -58,12 +58,20 @@ create table if not exists public.staff_settings (
   beauty_glow          int not null default 30,
   beauty_vshape        int not null default 0,
   beauty_narrow        int not null default 0,
+  gesture_type         text not null default 'mini-heart',
+  gesture_scale        int not null default 100,
   frame_url            text,
   gesture_left_url     text,
   gesture_right_url    text,
   passcode             text not null default 'changeme',
   updated_at           timestamptz not null default now()
 );
+
+-- Columns added after the table first shipped — ADD COLUMN IF NOT EXISTS so
+-- re-running this file upgrades an existing install (CREATE TABLE IF NOT
+-- EXISTS above would skip them). New columns go here as the schema grows.
+alter table public.staff_settings add column if not exists gesture_type  text not null default 'mini-heart';
+alter table public.staff_settings add column if not exists gesture_scale int  not null default 100;
 
 insert into public.staff_settings (id)
 values (1)
@@ -96,6 +104,8 @@ create or replace function public.update_staff_settings(
   p_beauty_glow        int  default null,
   p_beauty_vshape      int  default null,
   p_beauty_narrow      int  default null,
+  p_gesture_type       text default null,
+  p_gesture_scale      int  default null,
   p_frame_url          text default null,
   p_gesture_left_url   text default null,
   p_gesture_right_url  text default null
@@ -120,6 +130,8 @@ begin
     beauty_glow        = coalesce(p_beauty_glow, beauty_glow),
     beauty_vshape      = coalesce(p_beauty_vshape, beauty_vshape),
     beauty_narrow      = coalesce(p_beauty_narrow, beauty_narrow),
+    gesture_type       = coalesce(p_gesture_type, gesture_type),
+    gesture_scale      = coalesce(p_gesture_scale, gesture_scale),
     -- asset URLs: null (param omitted) keeps the current value; an empty
     -- string is the explicit "clear this asset" sentinel from the Staff
     -- Page's Remove button; any other value replaces it.
@@ -143,6 +155,7 @@ revoke select on public.staff_settings from anon;
 grant select (
   id, output_width, output_height, time_limit_seconds,
   beauty_smooth, beauty_glow, beauty_vshape, beauty_narrow,
+  gesture_type, gesture_scale,
   frame_url, gesture_left_url, gesture_right_url, updated_at
 ) on public.staff_settings to anon;
 
