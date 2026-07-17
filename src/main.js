@@ -152,17 +152,33 @@ if (inWebview) {
 }
 
 /* ---------- camera + mic ---------- */
+let cameraStream = null;
 let micTrack = null;
 let guestName = '';
 
-startBtn.addEventListener('click', async () => {
-  const stream = await navigator.mediaDevices.getUserMedia({
+// Shared by the first camera grant (startBtn) and every retake
+// (retryBtn) — recording end always releases the hardware, so a
+// retake has to re-request getUserMedia rather than reuse a track.
+async function startCamera() {
+  cameraStream = await navigator.mediaDevices.getUserMedia({
     video: { facingMode: 'user', width: 1280, height: 720 },
     audio: true
   });
-  video.srcObject = stream;
+  video.srcObject = cameraStream;
   await video.play();
-  micTrack = stream.getAudioTracks()[0];
+  micTrack = cameraStream.getAudioTracks()[0];
+}
+
+function stopCamera() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
+  }
+  micTrack = null;
+}
+
+startBtn.addEventListener('click', async () => {
+  await startCamera();
   guestName = nameInput.value;
 
   for (const c of [blurCanvas, maskCanvas, skinCanvas, compCanvas]) {
@@ -432,6 +448,7 @@ recordBtn.addEventListener('click', () => {
 // only starts when it hits zero.
 function runPreRoll() {
   preRolling = true;
+  gestureHint.style.display = 'none';
   controls.style.display = 'none';
   preRollEl.style.display = 'flex';
   preRollEl.textContent = String(PRE_ROLL_SECONDS);
@@ -489,6 +506,8 @@ function stopRecording() {
 }
 
 function onRecordingStop() {
+  stopCamera();
+
   const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
   const filename = buildFilename(mimeType, new Date(), sanitizeName(guestName));
   const url = URL.createObjectURL(blob);
@@ -559,7 +578,16 @@ async function uploadClip(blob, filename) {
   }
 }
 
-retryBtn.addEventListener('click', () => {
+retryBtn.addEventListener('click', async () => {
   result.style.display = 'none';
+  status.textContent = 'Starting camera…';
+  try {
+    await startCamera();
+  } catch (err) {
+    console.error('camera restart failed:', err);
+    status.textContent = 'Could not restart the camera — please reload the page.';
+    return;
+  }
+  gestureHint.style.display = 'block';
   controls.style.display = 'flex';
 });
