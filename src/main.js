@@ -299,14 +299,26 @@ const heartsByHand = { Right: null, Left: null };
 // built-in heart.
 const gestureImages = { Right: null, Left: null };
 
-function loadGestureImage(label, url) {
-  if (!url) { gestureImages[label] = null; return; }
+// Staff assets come from Supabase storage — a different origin. Drawing an
+// image fetched WITHOUT crossOrigin taints the canvas, and a tainted canvas
+// makes out.captureStream() throw SecurityError, which kills recording
+// outright. Supabase serves the CORS headers, so requesting the image in cors
+// mode keeps the canvas origin-clean. If CORS ever fails the image just
+// errors -> shouldUseGraphicImage() returns false -> no draw, no taint, and
+// recording still works.
+function loadCorsImage(url, onState) {
   const img = new Image();
+  img.crossOrigin = 'anonymous';
   const state = { url, loaded: false, failed: false, img };
   img.onload = () => { state.loaded = true; };
   img.onerror = () => { state.failed = true; };
   img.src = url;
-  gestureImages[label] = state;
+  onState(state);
+}
+
+function loadGestureImage(label, url) {
+  if (!url) { gestureImages[label] = null; return; }
+  loadCorsImage(url, state => { gestureImages[label] = state; });
 }
 
 // Staff-uploaded frame overlay (transparent PNG) — the top composition
@@ -316,12 +328,7 @@ let frameImage = null;
 
 function loadFrameImage(url) {
   if (!url) { frameImage = null; return; }
-  const img = new Image();
-  const state = { url, loaded: false, failed: false, img };
-  img.onload = () => { state.loaded = true; };
-  img.onerror = () => { state.failed = true; };
-  img.src = url;
-  frameImage = state;
+  loadCorsImage(url, state => { frameImage = state; });
 }
 
 // The output canvas is CSS-mirrored (selfie view); counter-mirror the frame
@@ -576,11 +583,27 @@ function runPreRoll() {
 
 function beginRecording() {
   mimeType = pickMimeType(MediaRecorder.isTypeSupported.bind(MediaRecorder));
-  const canvasStream = out.captureStream(30);
-  const combined = new MediaStream([
-    ...canvasStream.getVideoTracks(),
-    micTrack
-  ]);
+
+  // The pre-roll has already hidden the controls, so anything thrown here
+  // used to leave the guest staring at a live camera with no buttons at all
+  // (what a tainted canvas did). Always hand them a way back instead.
+  let combined;
+  try {
+    const canvasStream = out.captureStream(30);
+    combined = new MediaStream([
+      ...canvasStream.getVideoTracks(),
+      micTrack
+    ]);
+  } catch (err) {
+    console.error('could not capture the canvas:', err);
+    status.textContent = 'Could not start recording — please reload the page.';
+    status.classList.add('warning');
+    controls.style.display = 'flex';
+    recordBtn.style.display = 'inline-block';
+    stopBtn.style.display = 'none';
+    gestureHint.style.display = 'block';
+    return;
+  }
 
   chunks = [];
   mediaRecorder = new MediaRecorder(combined, mimeType ? { mimeType } : undefined);
