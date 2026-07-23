@@ -65,6 +65,30 @@ describe('previewBox', () => {
     const box = previewBox(400, 900, 9, 16, 12, 100);
     expect(box.y + box.height).toBeCloseTo(900 - 100, 5);
   });
+
+  // topPad raises the TOP minimum independently of the side pad — a wide,
+  // short window makes the box height-constrained, which clamps top at
+  // whatever the floor is (previously always the same `pad` as the sides;
+  // real report: top measured 24px when 60px was wanted, left/right were
+  // already fine at 24px and shouldn't also jump to 60).
+  it('raises the top minimum independently of the side pad via topPad', () => {
+    // wide+short area -> height-constrained, box top would otherwise clamp at pad
+    const box = previewBox(700, 500, 9, 16, 12, 100, 60);
+    expect(box.y).toBeGreaterThanOrEqual(60);
+    expect(box.x).toBeGreaterThanOrEqual(12); // side pad still honored (independently)
+  });
+
+  it('keeps the side pad exact (not raised) when only topPad is increased and the box is width-constrained', () => {
+    // generous width budget relative to a tall-enough area -> width-constrained,
+    // so x should still touch the 12px side pad exactly, unaffected by topPad=60
+    const box = previewBox(400, 900, 9, 16, 12, 12, 60);
+    expect(box.x).toBeCloseTo(12, 5);
+    expect(box.y).toBeGreaterThanOrEqual(60);
+  });
+
+  it('defaults topPad to the same pad as the other edges when omitted', () => {
+    expect(previewBox(400, 800, 9, 16, 12, 12)).toEqual(previewBox(400, 800, 9, 16, 12, 12, 12));
+  });
 });
 
 describe('aspectFit', () => {

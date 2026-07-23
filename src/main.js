@@ -462,9 +462,10 @@ function loop() {
   // means the box always shrinks to leave it clear, never overlaps it.
   const controlsRect = controls.getBoundingClientRect();
   const bottomReserve = (availH - controlsRect.top) + 28;
+  const topReserve = 60; // minimum top gap, independent of the 24px side pad
 
   const box = previewBox(availW, availH,
-    settings.outputWidth, settings.outputHeight, pad, bottomReserve);
+    settings.outputWidth, settings.outputHeight, pad, bottomReserve, topReserve);
   out.style.width = `${Math.round(box.width)}px`;
   out.style.height = `${Math.round(box.height)}px`;
   out.style.left = `${Math.round(box.x)}px`;

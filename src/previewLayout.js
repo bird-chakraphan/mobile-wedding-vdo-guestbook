@@ -24,21 +24,23 @@ export function containBox(availW, availH, ratioW, ratioH) {
 }
 
 // The preview box for a given available area: fit the output ratio inside
-// that area minus `pad` on every side, then centre it. `bottomPad` lets a
-// caller reserve extra room below the box — e.g. for a control bar whose
-// real height varies with font/content — without changing the top/side
-// pad; it defaults to `pad` so the box stays symmetric (centred) when
-// omitted. When it's explicitly larger than `pad`, the box is bottom-
-// anchored instead of centred: its bottom edge sits exactly `bottomPad`
-// above the reserved edge, giving an exact, predictable gap regardless of
-// whether the box ends up width- or height-constrained (centring within
-// the reduced band would otherwise split the slack and shrink the gap).
+// that area minus `pad` on the sides, `topPad` above, and `bottomPad`
+// below, then position it. `bottomPad`/`topPad` let a caller reserve extra
+// room beyond the side pad — e.g. bottomPad for a control bar whose real
+// height varies with font/content, topPad for a minimum top gap independent
+// of the sides — without changing `pad`; both default to `pad` so the box
+// stays symmetric (centred) when omitted. When either is explicitly larger
+// than `pad`, the box is anchored instead of centred: its bottom edge sits
+// exactly `bottomPad` above the reserved edge and it never rises above
+// `topPad`, giving an exact, predictable gap regardless of whether the box
+// ends up width- or height-constrained (centring within the reduced band
+// would otherwise split the slack and shrink whichever gap was requested).
 // Returns the box size plus its top-left offset within the area.
-export function previewBox(availW, availH, ratioW, ratioH, pad, bottomPad = pad) {
-  const box = containBox(availW - pad * 2, availH - pad - bottomPad, ratioW, ratioH);
-  const y = bottomPad === pad
+export function previewBox(availW, availH, ratioW, ratioH, pad, bottomPad = pad, topPad = pad) {
+  const box = containBox(availW - pad * 2, availH - topPad - bottomPad, ratioW, ratioH);
+  const y = bottomPad === pad && topPad === pad
     ? (availH - box.height) / 2
-    : Math.max(pad, availH - bottomPad - box.height);
+    : Math.max(topPad, availH - bottomPad - box.height);
   return {
     width: box.width,
     height: box.height,
