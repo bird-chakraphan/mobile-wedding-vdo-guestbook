@@ -25,15 +25,18 @@ export function containBox(availW, availH, ratioW, ratioH) {
 }
 
 // The preview box for a given available area: fit the output ratio inside
-// that area minus `pad` on every side, then centre it. Returns the box size
-// plus its top-left offset within the area.
-export function previewBox(availW, availH, ratioW, ratioH, pad) {
-  const box = containBox(availW - pad * 2, availH - pad * 2, ratioW, ratioH);
+// that area minus `pad` on every side, then centre it. `bottomPad` lets a
+// caller reserve extra room below the box — e.g. for a control bar whose
+// real height varies with font/content — without changing the top/side
+// pad; it defaults to `pad` so the box stays symmetric when omitted.
+// Returns the box size plus its top-left offset within the area.
+export function previewBox(availW, availH, ratioW, ratioH, pad, bottomPad = pad) {
+  const box = containBox(availW - pad * 2, availH - pad - bottomPad, ratioW, ratioH);
   return {
     width: box.width,
     height: box.height,
     x: (availW - box.width) / 2,
-    y: (availH - box.height) / 2
+    y: pad + (availH - pad - bottomPad - box.height) / 2
   };
 }
 

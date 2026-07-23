@@ -441,8 +441,17 @@ function loop() {
   const availW = document.documentElement.clientWidth;
   const availH = document.documentElement.clientHeight;
   const pad = edgePadding(Math.min(availW, availH));
+
+  // #controls (Record/Stop) is bottom-anchored independently of the canvas
+  // box, and its real height varies with font metrics/label length — a
+  // fixed guess overlapped the button on some devices. Measuring its live
+  // top edge each frame and reserving down to there (plus a breathing gap)
+  // means the box always shrinks to leave it clear, never overlaps it.
+  const controlsRect = controls.getBoundingClientRect();
+  const bottomReserve = (availH - controlsRect.top) + 16;
+
   const box = previewBox(availW, availH,
-    settings.outputWidth, settings.outputHeight, pad);
+    settings.outputWidth, settings.outputHeight, pad, bottomReserve);
   out.style.width = `${Math.round(box.width)}px`;
   out.style.height = `${Math.round(box.height)}px`;
   out.style.left = `${Math.round(box.x)}px`;

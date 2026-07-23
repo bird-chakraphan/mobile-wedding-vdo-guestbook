@@ -43,6 +43,19 @@ describe('previewBox', () => {
     expect(box.x).toBeGreaterThanOrEqual(24);
     expect(box.y).toBeCloseTo(24, 5);
   });
+
+  // bottomPad lets a caller reserve extra room below the box (e.g. for a
+  // control bar) without changing the top/side pad — real geometry from a
+  // report of the record button overlapping the camera preview box.
+  it('shrinks the box to leave room for a bottom UI element without overlapping it', () => {
+    const box = previewBox(400, 800, 9, 16, 12, 200);
+    expect(box.y).toBeGreaterThanOrEqual(12);
+    expect(box.y + box.height).toBeLessThanOrEqual(800 - 200);
+  });
+
+  it('defaults the bottom reserve to the same pad as the other edges when omitted', () => {
+    expect(previewBox(400, 800, 9, 16, 12)).toEqual(previewBox(400, 800, 9, 16, 12, 12));
+  });
 });
 
 describe('aspectFit', () => {
