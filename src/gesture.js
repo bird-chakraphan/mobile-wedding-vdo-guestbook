@@ -95,10 +95,10 @@ export function isPeace(landmarks, vw, vh) {
 // reads naturally for both "a" and "an" gestures.
 //
 // hintText is an optional literal override — Bird's real Thai copy from the
-// reference design, currently supplied for point-up only (it's the live
-// setting). The others fall back to the generic English template below
-// until Thai wording is supplied for them too — same "don't invent Thai"
-// rule as everywhere else in this file.
+// reference design, currently supplied for point-up and peace. The rest
+// fall back to the generic English template below until Thai wording is
+// supplied for them too — same "don't invent Thai" rule as everywhere
+// else in this file.
 export const GESTURE_OPTIONS = [
   { value: 'mini-heart', label: 'Mini heart 🫰', hintName: 'a mini heart 🫰' },
   { value: 'open-palm', label: 'Open palm ✋', hintName: 'an open palm ✋' },
@@ -106,7 +106,10 @@ export const GESTURE_OPTIONS = [
     value: 'point-up', label: 'Point up ☝️', hintName: 'a pointing finger ☝️',
     hintText: 'ลองชี้นิ้วขึ้นกลางอากาศดู\n☝มือซ้ายทีมอิท · มือขวาทีมโบ👆'
   },
-  { value: 'peace', label: 'Peace ✌️', hintName: 'a peace sign ✌️' },
+  {
+    value: 'peace', label: 'Peace ✌️', hintName: 'a peace sign ✌️',
+    hintText: 'ลองชูสองนิ้วดู ✌️\nมือซ้ายทีมอิท · มือขวาทีมโบ'
+  },
 ];
 
 // The guest's record-screen hint. The gesture is staff-configurable, so the

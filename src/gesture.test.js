@@ -319,15 +319,19 @@ describe('majorityBoolean', () => {
 
 describe('gestureHintText', () => {
   it('names the staff-selected gesture so the guest hint matches what pops the graphic', () => {
-    expect(gestureHintText('peace')).toBe('Make a peace sign ✌️ while recording to pop a graphic.');
     expect(gestureHintText('open-palm')).toBe('Make an open palm ✋ while recording to pop a graphic.');
     expect(gestureHintText('mini-heart')).toBe('Make a mini heart 🫰 while recording to pop a graphic.');
   });
 
-  // point-up has a literal hintText override (Bird's real Thai copy from
-  // the reference design) rather than the generic English template.
+  // point-up and peace have a literal hintText override (Bird's real Thai
+  // copy from the reference design) rather than the generic English
+  // template — mini-heart and open-palm still use it, pending their Thai.
   it('uses the literal Thai hint for point-up', () => {
     expect(gestureHintText('point-up')).toBe('ลองชี้นิ้วขึ้นกลางอากาศดู\n☝มือซ้ายทีมอิท · มือขวาทีมโบ👆');
+  });
+
+  it('uses the literal Thai hint for peace', () => {
+    expect(gestureHintText('peace')).toBe('ลองชูสองนิ้วดู ✌️\nมือซ้ายทีมอิท · มือขวาทีมโบ');
   });
 
   // Matches detectGesture's default: an unknown/absent gesture_type behaves
