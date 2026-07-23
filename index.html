@@ -107,14 +107,14 @@
     padding: 40px 28px; box-sizing: border-box; overflow-y: auto;
   }
   #entryHero {
-    width: 100%; aspect-ratio: 319 / 235; object-fit: cover;
+    width: 100%; max-width: 400px; aspect-ratio: 319 / 235; object-fit: cover;
     border-radius: 12px; flex-shrink: 0;
   }
   /* heading + input as one group (mirrors Figma's own "Container" grouping)
      so the 56px image gap and 20px heading-to-input gap can differ */
   #entryFields {
     display: flex; flex-direction: column; align-items: center;
-    gap: 20px; width: 100%;
+    gap: 20px; width: 100%; max-width: 400px;
   }
   #entry h1 {
     margin: 0; font-size: 28px; font-weight: 700; line-height: 1.5;
