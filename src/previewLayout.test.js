@@ -56,6 +56,17 @@ describe('previewBox', () => {
   it('defaults the bottom reserve to the same pad as the other edges when omitted', () => {
     expect(previewBox(400, 800, 9, 16, 12)).toEqual(previewBox(400, 800, 9, 16, 12, 12));
   });
+
+  // Centring the box within the reduced band would split any leftover slack
+  // between top and bottom, shrinking the visible gap below what was asked
+  // for (a real bug: a requested 28px gap rendered as ~62px). Bottom-
+  // anchoring instead makes the gap exact, regardless of whether the box
+  // ends up width- or height-constrained.
+  it('bottom-anchors with an EXACT gap when the box does not need the full reduced height', () => {
+    // generous height budget -> width-constrained, well short of the band
+    const box = previewBox(400, 900, 9, 16, 12, 100);
+    expect(box.y + box.height).toBeCloseTo(900 - 100, 5);
+  });
 });
 
 describe('aspectFit', () => {

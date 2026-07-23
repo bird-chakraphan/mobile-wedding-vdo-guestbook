@@ -448,7 +448,7 @@ function loop() {
   // top edge each frame and reserving down to there (plus a breathing gap)
   // means the box always shrinks to leave it clear, never overlaps it.
   const controlsRect = controls.getBoundingClientRect();
-  const bottomReserve = (availH - controlsRect.top) + 16;
+  const bottomReserve = (availH - controlsRect.top) + 28;
 
   const box = previewBox(availW, availH,
     settings.outputWidth, settings.outputHeight, pad, bottomReserve);

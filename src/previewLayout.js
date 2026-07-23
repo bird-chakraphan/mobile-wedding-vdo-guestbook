@@ -28,15 +28,23 @@ export function containBox(availW, availH, ratioW, ratioH) {
 // that area minus `pad` on every side, then centre it. `bottomPad` lets a
 // caller reserve extra room below the box — e.g. for a control bar whose
 // real height varies with font/content — without changing the top/side
-// pad; it defaults to `pad` so the box stays symmetric when omitted.
+// pad; it defaults to `pad` so the box stays symmetric (centred) when
+// omitted. When it's explicitly larger than `pad`, the box is bottom-
+// anchored instead of centred: its bottom edge sits exactly `bottomPad`
+// above the reserved edge, giving an exact, predictable gap regardless of
+// whether the box ends up width- or height-constrained (centring within
+// the reduced band would otherwise split the slack and shrink the gap).
 // Returns the box size plus its top-left offset within the area.
 export function previewBox(availW, availH, ratioW, ratioH, pad, bottomPad = pad) {
   const box = containBox(availW - pad * 2, availH - pad - bottomPad, ratioW, ratioH);
+  const y = bottomPad === pad
+    ? (availH - box.height) / 2
+    : Math.max(pad, availH - bottomPad - box.height);
   return {
     width: box.width,
     height: box.height,
     x: (availW - box.width) / 2,
-    y: pad + (availH - pad - bottomPad - box.height) / 2
+    y
   };
 }
 
