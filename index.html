@@ -97,6 +97,12 @@
     color: #fff; font-size: 20px; line-height: 1.5; text-align: center;
     text-shadow: 0 1px 3px rgba(0,0,0,.4);
   }
+  /* gestureHintText (gesture.js) embeds a literal \n at the intended line
+     break for some gestures (e.g. point-up) — plain text nodes ignore that
+     and only wrap by width, so the browser was picking its own break
+     point instead of the one Bird specified. pre-line honors \n as a real
+     break while still wrapping normally if a line runs long. */
+  #gestureHint { white-space: pre-line; }
 
   /* All offsets below are pulled from the Figma frame's real metadata
      (375x812 reference), not eyeballed — see get_metadata on node 1:3. */
