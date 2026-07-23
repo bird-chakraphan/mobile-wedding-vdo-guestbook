@@ -346,7 +346,7 @@ function previewLoop() {
   // Preview box follows the CURRENTLY SELECTED output ratio (live, not the
   // saved value) so changing the preset reshapes the preview immediately.
   const preset = OUTPUT_PRESETS[presetSelect.value] || { width: 1080, height: 1920 };
-  const pad = edgePadding(window.innerWidth);
+  const pad = edgePadding();
   const box = previewBox(previewColumn.clientWidth, previewColumn.clientHeight,
     preset.width, preset.height, pad);
   previewCanvas.width = Math.round(box.width);

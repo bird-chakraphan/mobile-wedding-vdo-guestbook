@@ -3,12 +3,11 @@
 // output ratio (9:16 portrait, 1:1 square, …) fitted inside the available
 // space with an even edge gap — pure math so it's testable without a DOM.
 
-const SMALL_SCREEN_MAX = 600; // px; at/below this, use the tighter edge gap
-
-// Edge gap between the preview box and the screen: 12px on small screens
-// (phones), 24px on larger ones (tablets/desktop).
-export function edgePadding(screenSize) {
-  return screenSize <= SMALL_SCREEN_MAX ? 12 : 24;
+// Edge gap between the preview box and the screen — a flat 24px minimum on
+// every device, phones included (a tighter 12px tier used to apply to
+// small screens; removed per Bird's explicit "minimum 24px on all sides").
+export function edgePadding() {
+  return 24;
 }
 
 // Largest ratioW:ratioH box that fits inside availW x availH (contain fit).

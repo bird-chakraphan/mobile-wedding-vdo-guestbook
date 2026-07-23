@@ -2,13 +2,11 @@ import { describe, it, expect } from 'vitest';
 import { edgePadding, containBox, previewBox, aspectFit } from './previewLayout.js';
 
 describe('edgePadding', () => {
-  it('uses 12px on small screens (<= 600px)', () => {
-    expect(edgePadding(375)).toBe(12);
-    expect(edgePadding(600)).toBe(12);
-  });
-  it('uses 24px on larger screens', () => {
-    expect(edgePadding(601)).toBe(24);
-    expect(edgePadding(1280)).toBe(24);
+  // Bird: the top/left/right gap around the camera preview box should
+  // never be less than 24px, phones included — a tighter 12px tier used
+  // to apply to small screens; removed.
+  it('is always 24px, regardless of screen size', () => {
+    expect(edgePadding()).toBe(24);
   });
 });
 

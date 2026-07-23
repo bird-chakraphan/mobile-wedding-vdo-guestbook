@@ -440,7 +440,7 @@ function loop() {
   // so reading the same box is what keeps the preview centred where CSS puts it.
   const availW = document.documentElement.clientWidth;
   const availH = document.documentElement.clientHeight;
-  const pad = edgePadding(Math.min(availW, availH));
+  const pad = edgePadding();
 
   // #controls (Record/Stop) is bottom-anchored independently of the canvas
   // box, and its real height varies with font metrics/label length — a
