@@ -32,10 +32,13 @@ _Prototyping sessions, July 2026 (Cowork with Claude). Feeds the Wedding VDO Gue
 - **Face reshape**: horizontal strip-squeeze toward face centerline; profile curve along face height decides the effect (V-shape = ramp to chin; narrow = flat with feathered ends). Curves are additive in one warp pass.
 - **Everything is free**: MediaPipe is Apache-2.0, runs on-device, no API costs. Hosting static = free tier (Vercel/Netlify/GitHub Pages).
 
+## Real-device pass (issue #10)
+
+- **iPhone (Safari) — confirmed 2026-07-23**: full guest flow works (countdown → record → stop → preview → upload), including with a staff frame/gesture asset set. Downloaded clip measured exactly 1080×1920 (the staff preset) in Photos. FaceLandmarker + HandLandmarker + beauty compositing + MediaRecorder running together stayed smooth even after the output canvas backing store grew from screen-sized (~219k px) to the full preset (~2.07M px, ~9.5×). Device model not yet recorded — ask Bird next time.
+- **Android (Chrome) — backlogged, not started.** Bird has no Android device to hand right now; resume when they do. Still needed: the real-device pass itself (watch for stutter — 720×1280 preset is the first escape hatch if so), handedness check (confirm left/right gesture graphics land on the correct hand — `HANDEDNESS_FLIPPED` in `src/main.js` exists for this), and a codec/upload check (clip plays back and lands in the Supabase `clips` bucket with the right filename — likely webm on Android vs iPhone's mp4/webm). Tracked in [issue #10](https://github.com/bird-chakraphan/mobile-wedding-vdo-guestbook/issues/10).
+- **Handedness on iPhone** — not explicitly re-confirmed yet either (yesterday's test covered size + smoothness, not left/right correctness). Worth a quick check whenever convenient, doesn't need to wait for Android.
+
 ## Not yet tested (risks for the MVP)
 
-- **Mobile browsers** (the actual guest device via QR!): iOS Safari camera + MediaRecorder support/codecs, portrait orientation, front camera selection, performance of FaceLandmarker + HandLandmarker running TOGETHER.
-- **MediaRecorder recording** of a composed canvas (`canvas.captureStream()` + mic audio track) — concept known, not yet built.
-- **Two models at once** (hands + face beauty filter simultaneously) — each costs frame time.
 - **File saving/upload** — requirement says "file to be saved": download-to-device is trivial; saving to a server/cloud for the couple needs a backend decision.
 - 3–4+ hands, sound classification, on-device speech.
