@@ -56,7 +56,9 @@ const entry   = document.getElementById('entry');
 const nameInput = document.getElementById('nameInput');
 const webviewNotice = document.getElementById('webviewNotice');
 const preRollEl = document.getElementById('preRoll');
+const canvasOverlay = document.getElementById('canvasOverlay');
 const gestureHint = document.getElementById('gestureHint');
+const timeLimitHint = document.getElementById('timeLimitHint');
 const startBtn = document.getElementById('startBtn');
 const status  = document.getElementById('status');
 const controls = document.getElementById('controls');
@@ -126,7 +128,7 @@ async function loadModels() {
   catch { handLandmarker = await createHandLandmarker("CPU"); }
 
   modelsReady = true;
-  startBtn.textContent = "Start camera";
+  startBtn.textContent = "พร้อมแล้ว กดเลย";
   refreshStartButton();
 }
 
@@ -150,9 +152,11 @@ if (inWebview) {
   // Show the default gesture's hint immediately so the line is never blank,
   // then correct it once the staff's actual choice arrives.
   gestureHint.textContent = gestureHintText(settings.gestureType);
+  timeLimitHint.textContent = `มีเวลา ${settings.timeLimitSeconds} วิ ในการอัด 1 ครั้ง`;
   loadSettings(supabase).then(loaded => {
     settings = loaded;
     gestureHint.textContent = gestureHintText(settings.gestureType);
+    timeLimitHint.textContent = `มีเวลา ${settings.timeLimitSeconds} วิ ในการอัด 1 ครั้ง`;
     loadGestureImage('Left', settings.gestureLeftUrl);
     loadGestureImage('Right', settings.gestureRightUrl);
     loadFrameImage(settings.frameUrl);
@@ -199,7 +203,7 @@ startBtn.addEventListener('click', async () => {
 
   entry.remove();
   controls.style.display = 'flex';
-  gestureHint.style.display = 'block';
+  canvasOverlay.style.display = 'flex';
   requestAnimationFrame(loop);
 });
 
@@ -441,6 +445,16 @@ function loop() {
     settings.outputWidth, settings.outputHeight, pad);
   out.style.width = `${Math.round(box.width)}px`;
   out.style.height = `${Math.round(box.height)}px`;
+  out.style.left = `${Math.round(box.x)}px`;
+  out.style.top = `${Math.round(box.y)}px`;
+
+  // #canvasOverlay carries the gesture hint + time-limit text and must sit
+  // exactly on top of #outCanvas — unlike the canvas it's NOT mirrored, so
+  // it needs its own explicit position rather than sharing the CSS transform.
+  canvasOverlay.style.left = out.style.left;
+  canvasOverlay.style.top = out.style.top;
+  canvasOverlay.style.width = out.style.width;
+  canvasOverlay.style.height = out.style.height;
 
   const scale = Math.max(out.width / vw, out.height / vh);
   const dx = (out.width - vw * scale) / 2;
@@ -561,11 +575,16 @@ recordBtn.addEventListener('click', () => {
 });
 
 // 5-second on-screen countdown so the guest can get ready — recording
-// only starts when it hits zero.
+// only starts when it hits zero. The Stop button is shown dimmed/disabled
+// throughout (per the reference design) as a preview of what's coming;
+// beginRecording() below re-enables it once recording actually starts.
 function runPreRoll() {
   preRolling = true;
-  gestureHint.style.display = 'none';
-  controls.style.display = 'none';
+  document.body.classList.add('recording-active');
+  canvasOverlay.style.display = 'none';
+  recordBtn.style.display = 'none';
+  stopBtn.style.display = 'inline-flex';
+  stopBtn.disabled = true;
   preRollEl.style.display = 'flex';
   preRollEl.textContent = String(PRE_ROLL_SECONDS);
   const started = performance.now();
@@ -596,12 +615,14 @@ function beginRecording() {
     ]);
   } catch (err) {
     console.error('could not capture the canvas:', err);
+    document.body.classList.remove('recording-active');
     status.textContent = 'Could not start recording — please reload the page.';
     status.classList.add('warning');
     controls.style.display = 'flex';
-    recordBtn.style.display = 'inline-block';
+    recordBtn.style.display = 'inline-flex';
     stopBtn.style.display = 'none';
-    gestureHint.style.display = 'block';
+    stopBtn.disabled = false;
+    canvasOverlay.style.display = 'flex';
     return;
   }
 
@@ -614,12 +635,13 @@ function beginRecording() {
   recording = true;
   controls.style.display = 'flex';
   recordBtn.style.display = 'none';
-  stopBtn.style.display = 'inline-block';
+  stopBtn.style.display = 'inline-flex';
+  stopBtn.disabled = false;
 
   const startTime = performance.now();
   elapsedInterval = setInterval(() => {
     const rec = recordingStatus(performance.now() - startTime, settings.timeLimitSeconds);
-    status.textContent = `Recording… ${rec.remainingSeconds}s left`;
+    status.textContent = `เหลือเวลาอีก... ${rec.remainingSeconds} วิ ในการอัด`;
     status.classList.toggle('warning', rec.warning);
   }, 250);
 
@@ -639,6 +661,7 @@ function stopRecording() {
 
 function onRecordingStop() {
   stopCamera();
+  document.body.classList.remove('recording-active');
 
   const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
   const filename = buildFilename(mimeType, new Date(), sanitizeName(guestName));
@@ -647,26 +670,30 @@ function onRecordingStop() {
   previewVideo.src = url;
   downloadLink.href = url;
   downloadLink.download = filename;
-  uploadStatus.textContent = 'Uploading to the couple’s gallery…';
+  uploadStatus.textContent = 'กำลังส่งคลิป...';
   result.style.display = 'flex';
 
   setupSaveToPhotos(blob, filename);
 
   controls.style.display = 'none';
-  recordBtn.style.display = 'inline-block';
+  recordBtn.style.display = 'inline-flex';
   stopBtn.style.display = 'none';
+  stopBtn.disabled = false;
 
   uploadClip(blob, filename);
 }
 
 // "Save to Photos" via the Web Share API: the native share sheet has
 // "Save Video" (iOS) / gallery targets (Android). Only mp4 clips are
-// accepted by photo galleries — with webm, the button stays hidden and
-// the plain download link remains the only option.
+// accepted by photo galleries — with webm, the share button stays hidden
+// and the plain download link is the only option. The reference design
+// shows a single "โหลดคลิป" pill either way — one visible action button,
+// not both at once — so the two elements are mutually exclusive here.
 function setupSaveToPhotos(blob, filename) {
   const file = new File([blob], filename, { type: blob.type });
   const canShare = navigator.canShare && navigator.canShare({ files: [file] });
-  saveBtn.style.display = canShare ? 'inline-block' : 'none';
+  saveBtn.style.display = canShare ? 'inline-flex' : 'none';
+  downloadLink.style.display = canShare ? 'none' : 'inline-flex';
   if (!canShare) return;
   saveBtn.onclick = async () => {
     try {
@@ -691,8 +718,8 @@ async function uploadClip(blob, filename) {
       { attempts: 3 }
     );
     uploadStatus.textContent = error
-      ? `Upload failed after 3 tries (${error.message}) — your download still works, please save it.`
-      : 'Uploaded ✓ — the couple will get this clip.';
+      ? 'ไม่สามารถส่งคลิปได้ กรุณาลองใหม่'
+      : 'ส่งคลิปถึงบ่าวสาวเรียบร้อย 🎉';
     if (error) console.error('upload failed:', error.message);
 
     if (!error) {
@@ -705,7 +732,7 @@ async function uploadClip(blob, filename) {
       if (dbError) console.error('clip record insert failed:', dbError.message);
     }
   } catch (err) {
-    uploadStatus.textContent = `Upload failed (${err.message}) — your download still works, please save it.`;
+    uploadStatus.textContent = 'ไม่สามารถส่งคลิปได้ กรุณาลองใหม่';
     console.error('upload failed:', err);
   }
 }
@@ -720,6 +747,6 @@ retryBtn.addEventListener('click', async () => {
     status.textContent = 'Could not restart the camera — please reload the page.';
     return;
   }
-  gestureHint.style.display = 'block';
+  canvasOverlay.style.display = 'flex';
   controls.style.display = 'flex';
 });

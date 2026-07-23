@@ -4,7 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Wedding VDO Guest Book</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;700&display=swap" rel="stylesheet">
 <style>
+  :root {
+    /* warm cream/peach look from Bird's Figma redesign — one place to
+       tweak the palette rather than repeating hex values per element */
+    --warm-gradient: radial-gradient(120% 90% at 28% 22%, #fae6dc 0%, #ffffff 65%);
+    --accent-peach: #f8ad7c;
+    --accent-peach-border: #c1bf89;
+    --accent-brown: #743f17;
+    --ghost-bg: #ffece0;
+    --ghost-border: #ffddc6;
+    --canvas-placeholder: #1c1c29;
+  }
+
   /* 100dvh, not 100%: with viewport-fit=cover the initial containing block
      runs behind Safari's toolbar, so a 100%-tall body anchors bottom:24px
      UNDERNEATH it and the controls vanish. dvh tracks the visible viewport
@@ -12,48 +27,81 @@
      vh first as the fallback for older iOS. */
   html, body {
     margin: 0; height: 100vh; height: 100dvh;
-    background: #000; overflow: hidden; font-family: sans-serif;
+    background: var(--warm-gradient); overflow: hidden;
+    font-family: 'Noto Sans Thai', sans-serif;
   }
+
+  /* during pre-roll + recording the screen goes solid black (matches
+     Figma states 3/4) — idle/entry/result stay on the warm gradient */
+  body.recording-active { background: #000; }
 
   /* video stays hidden — we show the PROCESSED canvas instead (same
      approach as beauty-filter-camera.html) */
   #video { display: none; }
 
-  /* ratio-locked preview box, centred with an even edge gap; its pixel
-     size is set per-frame in JS to the staff-chosen output ratio */
+  /* ratio-locked preview box; its pixel size AND on-screen position are
+     set per-frame in JS (loop()) so #canvasOverlay below can track it
+     exactly — explicit left/top rather than a translate(-50%) trick,
+     since the overlay needs the same numbers to line up. */
   #outCanvas {
-    position: absolute; top: 50%; left: 50%;
-    transform: translate(-50%, -50%) scaleX(-1); /* centre + selfie mirror */
-    border-radius: 4px;
+    position: absolute;
+    transform: scaleX(-1); /* selfie mirror */
+    border-radius: 12px;
+    background: var(--canvas-placeholder); /* brief flash before first frame */
+  }
+
+  /* non-mirrored overlay sitting exactly on top of #outCanvas — carries
+     the gesture hint (top) and time-limit reminder (bottom) as real DOM
+     text, matching the reference design's "text inside the camera box"
+     layout without drawing text onto the canvas itself */
+  #canvasOverlay {
+    position: absolute; z-index: 4; display: none;
+    flex-direction: column; align-items: center; justify-content: space-between;
+    padding: 28px; box-sizing: border-box; pointer-events: none;
+    color: #fff; font-size: 20px; line-height: 1.5; text-align: center;
+    text-shadow: 0 1px 3px rgba(0,0,0,.4);
   }
 
   #entry {
-    position: absolute; z-index: 10; inset: 0; background: #000;
+    position: absolute; z-index: 10; inset: 0; background: var(--warm-gradient);
     display: flex; flex-direction: column; align-items: center;
-    justify-content: center; gap: 18px; color: #fff; text-align: center;
-    padding: 0 24px;
+    justify-content: center; gap: 20px; color: var(--accent-brown); text-align: center;
+    padding: 24px; box-sizing: border-box; overflow-y: auto;
   }
-  #entry p { margin: 0; font-size: 16px; line-height: 1.5; max-width: 420px; }
+  #entryHero {
+    width: min(100%, 319px); aspect-ratio: 319 / 235; object-fit: cover;
+    border-radius: 12px; flex-shrink: 0;
+  }
+  #entry h1 {
+    margin: 0; font-size: 28px; font-weight: 700; line-height: 1.5;
+  }
   #nameInput {
-    padding: 12px 18px; font-size: 17px; border-radius: 12px;
-    border: 1px solid #555; background: #111; color: #fff;
+    padding: 8px 20px; font-size: 20px; border-radius: 12px;
+    border: 1px solid #ddddbe; background: #fff; color: var(--accent-brown);
     width: min(80vw, 320px); text-align: center;
   }
-  #startBtn {
-    padding: 16px 32px; font-size: 18px; border-radius: 30px;
-    border: none; background: #e84393; color: #fff; cursor: pointer;
-  }
-  #startBtn:disabled { background: #555; cursor: not-allowed; opacity: .7; }
+  #nameInput::placeholder { color: #aaa; }
 
-  /* every fixed edge offset below clears the notch / home indicator that
-     viewport-fit=cover lets the page draw under */
-  #gestureHint {
-    position: absolute; z-index: 5; bottom: calc(96px + env(safe-area-inset-bottom, 0px)); left: 50%;
-    transform: translateX(-50%); width: 100%; max-width: 460px;
-    display: none; text-align: center; color: rgba(255,255,255,.9);
-    font-size: 14px; line-height: 1.5; text-shadow: 0 1px 3px #000;
-    padding: 0 16px; box-sizing: border-box;
+  #privacyNote {
+    position: absolute; z-index: 11; bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 8px; white-space: nowrap;
+    color: rgba(82,68,59,.6); font-size: 12px; letter-spacing: .5px;
   }
+  #privacyNote img { width: 10px; height: 10px; flex-shrink: 0; }
+
+  /* shared pill button look — every primary action (start/record/stop/
+     save-or-download) uses the same peach fill; retry gets the ghost
+     variant. One place to change the accent instead of six. */
+  .pill {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 12px 32px; font-size: 20px; border-radius: 30px;
+    border: 1px solid; text-decoration: none; text-align: center; cursor: pointer;
+  }
+  .pillPrimary { background: var(--accent-peach); border-color: var(--accent-peach-border); color: var(--accent-brown); }
+  .pillGhost { background: var(--ghost-bg); border-color: var(--ghost-border); color: var(--accent-peach); }
+  #startBtn:disabled { opacity: .5; cursor: not-allowed; }
+  #stopBtn:disabled { opacity: .5; cursor: default; }
 
   #webviewNotice {
     position: absolute; z-index: 30; inset: 0; background: #000;
@@ -82,42 +130,40 @@
     transform: translateX(-50%);
     display: none; gap: 16px;
   }
-  #controls button {
-    padding: 14px 28px; font-size: 16px; border-radius: 30px;
-    border: none; color: #fff; cursor: pointer;
-  }
-  #recordBtn { background: #e84393; }
-  #stopBtn { background: #444; display: none; }
+  #stopBtn { display: none; }
 
   #result {
-    position: absolute; z-index: 20; inset: 0; background: #000;
+    position: absolute; z-index: 20; inset: 0; background: var(--warm-gradient);
     display: none; flex-direction: column; align-items: center;
-    justify-content: center; gap: 16px;
+    justify-content: center; gap: 16px; padding: 24px; box-sizing: border-box;
   }
-  #result video { max-width: 92vw; max-height: 65vh; }
-  #uploadStatus { color: #fff; font-size: 14px; }
-  #result a, #result button {
-    padding: 12px 26px; border-radius: 24px; border: none;
-    background: #e84393; color: #fff; text-decoration: none;
-    font-size: 15px; cursor: pointer;
-  }
-  #retryBtn { background: #444; }
+  #result video { max-width: 92vw; max-height: 65vh; border-radius: 12px; }
+  #uploadStatus { color: var(--accent-brown); font-size: 20px; text-align: center; }
+  #resultActions { display: flex; gap: 16px; width: 100%; max-width: 375px; }
+  #resultActions .pill { flex: 1; }
+  #downloadLink { display: none; }
 </style>
 </head>
 <body>
 
 <video id="video" autoplay playsinline muted></video>
 <canvas id="outCanvas"></canvas>
-
-<div id="entry">
-  <p>💌 Record a video message for the couple!<br>
-  อัดคลิปวิดีโออวยพรให้บ่าวสาวกันเถอะ</p>
-  <input id="nameInput" type="text" lang="en" placeholder="Your name (English works best) / ชื่อของคุณ *" maxlength="60" required>
-  <button id="startBtn" disabled>Loading AI models…</button>
+<div id="canvasOverlay">
+  <!-- text is set from the staff-selected gesture in main.js (gestureHintText) -->
+  <div id="gestureHint"></div>
+  <div id="timeLimitHint"></div>
 </div>
 
-<!-- text is set from the staff-selected gesture in main.js (gestureHintText) -->
-<div id="gestureHint"></div>
+<div id="entry">
+  <img id="entryHero" src="/entry-hero.png" alt="I and B, 25 07 2026">
+  <h1>✨ มาอัดคลิปอวยพร ✨<br>ให้บ่าวสาวกัน</h1>
+  <input id="nameInput" type="text" lang="th" placeholder="กรอกชื่อที่บ่าวสาวอ่านแล้ว อ๋อออ" maxlength="60" required>
+  <button id="startBtn" class="pill pillPrimary" disabled>Loading AI models…</button>
+  <div id="privacyNote">
+    <img src="/lock-icon.svg" alt="">
+    <span>ข้อมูลของคุณจะถูกเก็บเป็นความลับ</span>
+  </div>
+</div>
 
 <div id="webviewNotice">
   <p>📱 กรุณาเปิดในเบราว์เซอร์</p>
@@ -130,16 +176,18 @@
 <div id="status"></div>
 
 <div id="controls">
-  <button id="recordBtn">● Record</button>
-  <button id="stopBtn">■ Stop</button>
+  <button id="recordBtn" class="pill pillPrimary">กดเพื่อเริ่มอัด</button>
+  <button id="stopBtn" class="pill pillPrimary">■ หยุด</button>
 </div>
 
 <div id="result">
-  <video id="previewVideo" controls playsinline></video>
   <div id="uploadStatus"></div>
-  <button id="saveBtn" style="display:none">Save to Photos</button>
-  <a id="downloadLink" download>Download clip</a>
-  <button id="retryBtn">Record again</button>
+  <video id="previewVideo" controls playsinline></video>
+  <div id="resultActions">
+    <button id="retryBtn" class="pill pillGhost">อัดอีกรอบ</button>
+    <button id="saveBtn" class="pill pillPrimary" style="display:none">โหลดคลิป</button>
+    <a id="downloadLink" class="pill pillPrimary" download>โหลดคลิป</a>
+  </div>
 </div>
 
 <script type="module" src="/src/main.js"></script>

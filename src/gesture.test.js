@@ -321,8 +321,13 @@ describe('gestureHintText', () => {
   it('names the staff-selected gesture so the guest hint matches what pops the graphic', () => {
     expect(gestureHintText('peace')).toBe('Make a peace sign ✌️ while recording to pop a graphic.');
     expect(gestureHintText('open-palm')).toBe('Make an open palm ✋ while recording to pop a graphic.');
-    expect(gestureHintText('point-up')).toBe('Make a pointing finger ☝️ while recording to pop a graphic.');
     expect(gestureHintText('mini-heart')).toBe('Make a mini heart 🫰 while recording to pop a graphic.');
+  });
+
+  // point-up has a literal hintText override (Bird's real Thai copy from
+  // the reference design) rather than the generic English template.
+  it('uses the literal Thai hint for point-up', () => {
+    expect(gestureHintText('point-up')).toBe('ลองชี้นิ้วขึ้นกลางอากาศดู\n☝มือซ้ายทีมอิท · มือขวาทีมโบ👆');
   });
 
   // Matches detectGesture's default: an unknown/absent gesture_type behaves
@@ -332,8 +337,15 @@ describe('gestureHintText', () => {
     expect(gestureHintText(undefined)).toBe(gestureHintText(GESTURE_OPTIONS[0].value));
   });
 
-  it('has hint wording for every staff-selectable gesture', () => {
+  it('has non-empty hint wording for every staff-selectable gesture', () => {
     for (const option of GESTURE_OPTIONS) {
+      expect(gestureHintText(option.value).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('every option without a literal hintText override still follows the English template', () => {
+    for (const option of GESTURE_OPTIONS) {
+      if (option.hintText) continue;
       expect(gestureHintText(option.value)).toMatch(/^Make .+ while recording to pop a graphic\.$/);
     }
   });
