@@ -61,6 +61,12 @@
     font-family: 'Noto Sans Thai', sans-serif;
   }
 
+  /* browsers give form controls their own UI-chrome font by default
+     instead of inheriting from the page — without this, every button and
+     input silently falls back to the system font regardless of the
+     font-family set above */
+  button, input, select, textarea { font-family: inherit; }
+
   /* during pre-roll + recording the screen goes solid black (matches
      Figma states 3/4) — idle/entry/result stay on the warm gradient */
   body.recording-active { background: #000; }
