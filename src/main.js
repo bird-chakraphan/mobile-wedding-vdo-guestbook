@@ -172,6 +172,16 @@ let cameraStream = null;
 let micTrack = null;
 let guestName = '';
 
+// Gates loop()'s self-perpetuating requestAnimationFrame chain. "Record
+// again" now returns to the entry screen instead of restarting the camera
+// immediately, so the gap between stopCamera() and the next startCamera()
+// can be indefinite (however long the guest takes to re-enter their name)
+// rather than the brief flash it used to be — without this, the loop
+// would keep running MediaPipe detection against a dead video element the
+// whole time, and a later Start click would stack a second parallel chain
+// on top of the one that never stopped.
+let cameraActive = false;
+
 // Shared by the first camera grant (startBtn) and every retake
 // (retryBtn) — recording end always releases the hardware, so a
 // retake has to re-request getUserMedia rather than reuse a track.
@@ -183,6 +193,7 @@ async function startCamera() {
   video.srcObject = cameraStream;
   await video.play();
   micTrack = cameraStream.getAudioTracks()[0];
+  cameraActive = true;
 }
 
 function stopCamera() {
@@ -191,6 +202,7 @@ function stopCamera() {
     cameraStream = null;
   }
   micTrack = null;
+  cameraActive = false;
 }
 
 startBtn.addEventListener('click', async () => {
@@ -201,7 +213,7 @@ startBtn.addEventListener('click', async () => {
     c.width = video.videoWidth; c.height = video.videoHeight;
   }
 
-  entry.remove();
+  entry.style.display = 'none';
   controls.style.display = 'flex';
   canvasOverlay.style.display = 'flex';
   requestAnimationFrame(loop);
@@ -404,6 +416,7 @@ const GEOMETRY_WINDOW = 5;
 const geometryHistory = [[], []];
 
 function loop() {
+  if (!cameraActive) return; // stops the rAF chain — see cameraActive's comment
   if (video.currentTime !== lastVideoTime) {
     lastVideoTime = video.currentTime;
     try {
@@ -742,16 +755,13 @@ async function uploadClip(blob, filename) {
   }
 }
 
-retryBtn.addEventListener('click', async () => {
+// "Record again" now returns all the way to the entry screen so the guest
+// re-enters their name, rather than restarting the camera straight into
+// the recording view with the previous name still attached — the camera
+// only starts again once they hit Start, same as the very first time.
+retryBtn.addEventListener('click', () => {
   result.style.display = 'none';
-  status.textContent = 'Starting camera…';
-  try {
-    await startCamera();
-  } catch (err) {
-    console.error('camera restart failed:', err);
-    status.textContent = 'Could not restart the camera — please reload the page.';
-    return;
-  }
-  canvasOverlay.style.display = 'flex';
-  controls.style.display = 'flex';
+  nameInput.value = '';
+  refreshStartButton();
+  entry.style.display = 'flex';
 });
