@@ -100,6 +100,7 @@ const previewColumn = document.getElementById('previewColumn');
 const previewVideo = document.getElementById('previewVideo');
 const previewCanvas = document.getElementById('previewCanvas');
 const viewToggle = document.getElementById('viewToggle');
+const previewStatus = document.getElementById('previewStatus');
 const pctx = previewCanvas.getContext('2d');
 
 // "Show detection" toggle: false = the composited output a guest sees
@@ -386,6 +387,7 @@ function previewLoop() {
   }
 
   const tips = { Right: null, Left: null };
+  let rightHandSeen = false, leftHandSeen = false;
   latestHands.forEach((landmarks, i) => {
     let rawLabel = latestHandedness[i]?.[0]?.categoryName || '';
     if (HANDEDNESS_FLIPPED) rawLabel = rawLabel === 'Left' ? 'Right' : 'Left';
@@ -394,6 +396,8 @@ function previewLoop() {
     history.push(rawLabel);
     if (history.length > HANDEDNESS_WINDOW) history.shift();
     const label = majorityHandedness(history);
+    if (label === 'Right') rightHandSeen = true;
+    if (label === 'Left') leftHandSeen = true;
 
     // Gesture + graphic size follow the LIVE form controls so the preview
     // reflects unsaved changes.
@@ -427,6 +431,18 @@ function previewLoop() {
   // Frame overlay only in the "actual" view — the detection view keeps the
   // skeleton unobstructed.
   if (!debugView) drawFrame(previewCanvas.width, previewCanvas.height);
+
+  // Hands-seen / gesture-detected status — the guest page used to show this
+  // (see main.js), but guests no longer see it. Staff still can, as part of
+  // the detection view, to confirm the model is picking up hands while tuning.
+  if (debugView) {
+    const gestureActive = tips.Right !== null || tips.Left !== null;
+    let msg = gestureActive ? '💖 Gesture detected!' : 'No gesture detected';
+    if (rightHandSeen || leftHandSeen) {
+      msg += ` — hands seen: ${[rightHandSeen && 'Right', leftHandSeen && 'Left'].filter(Boolean).join(', ')}`;
+    }
+    previewStatus.textContent = msg;
+  }
 
   requestAnimationFrame(previewLoop);
 }
@@ -507,6 +523,7 @@ gestureScaleInput.addEventListener('input', () => { gestureScaleVal.textContent 
 viewToggle.addEventListener('click', () => {
   debugView = !debugView;
   viewToggle.textContent = debugView ? 'Show actual' : 'Show detection';
+  previewStatus.style.display = debugView ? 'block' : 'none';
 });
 
 unlockBtn.addEventListener('click', async () => {

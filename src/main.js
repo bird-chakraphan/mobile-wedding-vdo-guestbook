@@ -503,8 +503,6 @@ function loop() {
 
   /* gesture detection: mini heart on either hand -> one floating heart
      per hand (right = red, left = pink) */
-  let rightHandSeen = false, leftHandSeen = false;
-  let debugLine = '';
   const tips = { Right: null, Left: null };
 
   latestHands.forEach((landmarks, i) => {
@@ -515,9 +513,6 @@ function loop() {
     history.push(rawLabel);
     if (history.length > HANDEDNESS_WINDOW) history.shift();
     const label = majorityHandedness(history);
-
-    if (label === 'Right') rightHandSeen = true;
-    if (label === 'Left') leftHandSeen = true;
 
     const rawMatchesGeometry = detectGesture(settings.gestureType, landmarks, vw, vh);
     const geomHistory = geometryHistory[i] || (geometryHistory[i] = []);
@@ -538,7 +533,6 @@ function loop() {
 
     if (DEBUG_SKELETON) {
       drawHandSkeleton(landmarks, vw, vh, out.width, out.height, matchesGeometry);
-      debugLine += ` [${label || '?'} geom:${matchesGeometry ? 'Y' : 'n'}]`;
     }
   });
 
@@ -550,17 +544,6 @@ function loop() {
   }
   drawHearts();
   drawFrame(octx, out.width, out.height);
-
-  const gestureActive = tips.Right !== null || tips.Left !== null;
-  if (!recording) {
-    let msg = 'Make your hand gesture to pop a graphic ✨';
-    if (rightHandSeen || leftHandSeen) {
-      msg += ` — hands seen: ${[rightHandSeen && 'Right', leftHandSeen && 'Left'].filter(Boolean).join(', ')}`;
-    }
-    if (gestureActive) msg = '💖 Gesture detected!';
-    if (DEBUG_SKELETON) msg += debugLine;
-    status.textContent = msg;
-  }
 
   requestAnimationFrame(loop);
 }
