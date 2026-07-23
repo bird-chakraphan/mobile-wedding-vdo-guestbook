@@ -692,7 +692,20 @@ function setupSaveToPhotos(blob, filename) {
       await navigator.share({ files: [file] });
     } catch (err) {
       // guest closing the share sheet is normal — only log real failures
-      if (err.name !== 'AbortError') console.error('share failed:', err);
+      if (err.name === 'AbortError') return;
+      // Mac Safari (confirmed): canShare() can report true and share()
+      // still rejects for this file — a known WebKit desktop quirk, not
+      // something we can detect ahead of time. The old 3-button layout
+      // always kept Download visible as a backup for exactly this kind of
+      // failure; the merged single-button design needs to fall back to it
+      // explicitly instead of leaving the guest with a button that does
+      // nothing. .click() is best-effort (Safari can be picky about a
+      // click fired after an await) — either way the button is now the
+      // working download link if they tap it themselves.
+      console.error('share failed, falling back to download:', err);
+      saveBtn.style.display = 'none';
+      downloadLink.style.display = 'inline-flex';
+      downloadLink.click();
     }
   };
 }

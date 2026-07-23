@@ -558,7 +558,15 @@ async function resolveAssetChanges() {
         contentType: file.type
       });
       if (error) throw new Error(`${field.filename} upload failed (${error.message})`);
-      changes[field.key] = supabase.storage.from('assets').getPublicUrl(field.filename).data.publicUrl;
+      // Bake the cache-buster into the URL that gets PERSISTED (not just
+      // the staff page's own in-memory refresh below) — the storage path
+      // is fixed per slot, so without this every future load (guest
+      // phones, a staff reload, anyone) keeps requesting the exact same
+      // URL a re-upload just overwrote, and the browser/CDN happily keeps
+      // serving the old cached bytes for it. This was the actual bug
+      // behind "the old frame keeps reappearing" after uploading a new one.
+      const publicUrl = supabase.storage.from('assets').getPublicUrl(field.filename).data.publicUrl;
+      changes[field.key] = bustCache(publicUrl);
     }
   }
 
@@ -601,14 +609,15 @@ form.addEventListener('submit', async (e) => {
 
   // Reflect uploads and removals in the live preview + the current-upload
   // thumbnail immediately, so the page matches what a guest will now load.
+  // assetChanges[field.key] is already cache-busted (resolveAssetChanges).
   for (const field of ASSET_FIELDS) {
     if (field.input.files[0]) {
-      const busted = bustCache(assetChanges[field.key]);
-      field.currentUrl = busted;
+      const url = assetChanges[field.key];
+      field.currentUrl = url;
       field.markedForRemoval = false;
       field.input.value = '';
-      applyAssetToPreview(field, busted);
-      showCurrent(field, busted);
+      applyAssetToPreview(field, url);
+      showCurrent(field, url);
     } else if (field.markedForRemoval) {
       field.currentUrl = null;
       field.markedForRemoval = false;
