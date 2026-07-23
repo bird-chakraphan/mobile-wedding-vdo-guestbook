@@ -118,6 +118,18 @@
   }
   #nameInput::placeholder { color: #aaa; }
 
+  /* pinned to the bottom rather than flowing with hero/heading/input —
+     matches the reference design's large gap before the button, and the
+     same bottom-anchored pattern already used by #privacyNote/#controls */
+  #startBtn {
+    /* position:absolute blockifies inline-flex to flex, which broke the
+       pill's shrink-to-fit sizing (it stretched wide and wrapped the
+       text) — width:max-content restores hug-content sizing */
+    position: absolute; z-index: 11; left: 50%; transform: translateX(-50%);
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    width: max-content; white-space: nowrap;
+  }
+
   #privacyNote {
     position: absolute; z-index: 11; bottom: calc(24px + env(safe-area-inset-bottom, 0px));
     left: 50%; transform: translateX(-50%);
