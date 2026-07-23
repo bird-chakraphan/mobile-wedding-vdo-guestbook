@@ -80,9 +80,10 @@
      exactly — explicit left/top rather than a translate(-50%) trick,
      since the overlay needs the same numbers to line up. */
   #outCanvas {
-    position: absolute;
+    position: absolute; box-sizing: border-box; /* border drawn inside the
+      JS-computed size, so it stays pixel-aligned with #canvasOverlay */
     transform: scaleX(-1); /* selfie mirror */
-    border-radius: 12px;
+    border-radius: 12px; border: 1px solid #000;
     background: var(--canvas-placeholder); /* brief flash before first frame */
   }
 
