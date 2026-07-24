@@ -142,15 +142,15 @@
        pill's shrink-to-fit sizing (it stretched wide and wrapped the
        text) — width:max-content restores hug-content sizing */
     position: absolute; z-index: 11; left: 50%; transform: translateX(-50%);
-    bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px)); /* matches #controls/#resultActions on every other screen */
     width: max-content; white-space: nowrap;
   }
 
   #privacyNote {
-    /* 40 (startBtn's own offset) + ~56 (its real rendered height — taller
+    /* 24 (startBtn's own offset) + ~56 (its real rendered height — taller
        than Figma's estimate, see TESTED-LEARNINGS.md, from Thai tone-mark
        line-height) + 16px clear gap, rounded up for safety margin */
-    position: absolute; z-index: 11; bottom: calc(116px + env(safe-area-inset-bottom, 0px));
+    position: absolute; z-index: 11; bottom: calc(100px + env(safe-area-inset-bottom, 0px));
     left: 50%; transform: translateX(-50%);
     display: flex; align-items: center; gap: 8px; white-space: nowrap;
     color: rgba(82,68,59,.6); font-size: 12px; letter-spacing: .5px;
@@ -206,7 +206,14 @@
   }
   #result video { max-width: 92vw; max-height: 65vh; border-radius: 12px; }
   #uploadStatus { color: var(--accent-brown); font-size: 20px; text-align: center; }
-  #resultActions { display: flex; gap: 16px; width: 100%; max-width: 375px; }
+  /* pinned to the bottom like every other screen's button(s), rather than
+     flowing inside #result's centred column — pulling it out of flow this
+     way needs its own centring/width since it no longer inherits #result's */
+  #resultActions {
+    position: absolute; z-index: 21; left: 50%; transform: translateX(-50%);
+    bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    display: flex; gap: 16px; width: calc(100% - 48px); max-width: 375px;
+  }
   #resultActions .pill { flex: 1; }
   #downloadLink { display: none; }
 </style>
