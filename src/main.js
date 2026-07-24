@@ -674,12 +674,15 @@ function onRecordingStop() {
   const url = URL.createObjectURL(blob);
 
   previewVideo.src = url;
-  // The `muted`/`autoplay` HTML attributes alone are unreliable when src is
-  // set dynamically on an already-existing element (vs. a fresh page load)
-  // — calling play() explicitly is the reliable trigger. Muted is required
-  // for any browser to allow this without a user gesture; controls still
-  // let the guest unmute/pause/scrub. Swallow rejection (e.g. a very
-  // locked-down browser) — the guest can just tap play manually.
+  // The `muted`/`loop` HTML attributes alone are unreliable when src is set
+  // dynamically on an already-existing element (vs. a fresh page load) —
+  // calling play() explicitly is the reliable trigger. Muted is required
+  // for any browser to allow this without a user gesture. No `controls`
+  // attribute deliberately: this plays as a continuous silent loop, and
+  // Safari's native controls chrome (a dark overlay with big play/pause +
+  // skip-10s buttons) doesn't fit that — it showed on autoplay-start even
+  // without a tap. Swallow rejection (e.g. a very locked-down browser) —
+  // the guest just sees the first frame instead of a moving preview.
   previewVideo.play().catch(() => {});
   downloadLink.href = url;
   downloadLink.download = filename;
