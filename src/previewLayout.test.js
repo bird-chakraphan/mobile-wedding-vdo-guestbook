@@ -56,34 +56,42 @@ describe('previewBox', () => {
   });
 
   // Centring the box within the reduced band would split any leftover slack
-  // between top and bottom, shrinking the visible gap below what was asked
-  // for (a real bug: a requested 28px gap rendered as ~62px). Bottom-
-  // anchoring instead makes the gap exact, regardless of whether the box
-  // ends up width- or height-constrained.
-  it('bottom-anchors with an EXACT gap when the box does not need the full reduced height', () => {
+  // between top and bottom, shrinking whichever gap was asked to be exact.
+  // Non-overlap with the reserved bottom edge is guaranteed either way
+  // (containBox already fits the box within the full topPad+bottomPad
+  // band) — what changes is which edge absorbs the leftover slack.
+  //
+  // Priority flipped from an earlier version of this function: it used to
+  // bottom-anchor (exact gap to the control bar, top absorbed the slack).
+  // Bird then asked for the TOP gap to align consistently across every
+  // screen (entry/idle/recording/result), which only top-anchoring can
+  // guarantee — so top-anchoring is now the rule; the bottom gap is "at
+  // least bottomPad", not exact, same trade-off just on the other edge.
+  it('top-anchors with an EXACT gap when the box does not need the full reduced height', () => {
     // generous height budget -> width-constrained, well short of the band
     const box = previewBox(400, 900, 9, 16, 12, 100);
-    expect(box.y + box.height).toBeCloseTo(900 - 100, 5);
+    expect(box.y).toBeCloseTo(12, 5); // touches topPad (defaults to pad) exactly
   });
 
-  // topPad raises the TOP minimum independently of the side pad — a wide,
-  // short window makes the box height-constrained, which clamps top at
-  // whatever the floor is (previously always the same `pad` as the sides;
-  // real report: top measured 24px when 60px was wanted, left/right were
-  // already fine at 24px and shouldn't also jump to 60).
-  it('raises the top minimum independently of the side pad via topPad', () => {
-    // wide+short area -> height-constrained, box top would otherwise clamp at pad
+  // topPad sets the TOP gap independently of the side pad, and is now the
+  // exact value (not just a floor) whenever it differs from pad.
+  it('sets the top gap independently of the side pad via topPad', () => {
     const box = previewBox(700, 500, 9, 16, 12, 100, 60);
-    expect(box.y).toBeGreaterThanOrEqual(60);
+    expect(box.y).toBeCloseTo(60, 5);
     expect(box.x).toBeGreaterThanOrEqual(12); // side pad still honored (independently)
   });
 
-  it('keeps the side pad exact (not raised) when only topPad is increased and the box is width-constrained', () => {
+  it('keeps the side pad exact when only topPad is increased and the box is width-constrained', () => {
     // generous width budget relative to a tall-enough area -> width-constrained,
     // so x should still touch the 12px side pad exactly, unaffected by topPad=60
     const box = previewBox(400, 900, 9, 16, 12, 12, 60);
     expect(box.x).toBeCloseTo(12, 5);
-    expect(box.y).toBeGreaterThanOrEqual(60);
+    expect(box.y).toBeCloseTo(60, 5);
+  });
+
+  it('never lets the box overlap the reserved bottom edge, regardless of anchor edge', () => {
+    const box = previewBox(400, 900, 9, 16, 12, 200, 60);
+    expect(box.y + box.height).toBeLessThanOrEqual(900 - 200);
   });
 
   it('defaults topPad to the same pad as the other edges when omitted', () => {

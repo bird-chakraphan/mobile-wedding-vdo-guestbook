@@ -111,7 +111,10 @@
     position: absolute; z-index: 10; inset: 0; background: var(--warm-gradient);
     display: flex; flex-direction: column; align-items: center;
     justify-content: flex-start; gap: 56px; color: var(--accent-brown); text-align: center;
-    padding: 40px 28px; box-sizing: border-box; overflow-y: auto;
+    /* top raised from Figma's exact 40px to 60px so it lines up with the
+       camera preview box's top on the idle/recording screens (topPad in
+       main.js's previewBox call) — consistent top across every screen */
+    padding: 60px 28px 40px; box-sizing: border-box; overflow-y: auto;
   }
   #entryHero {
     width: 100%; max-width: 400px; aspect-ratio: 319 / 235; object-fit: cover;
@@ -202,7 +205,10 @@
   #result {
     position: absolute; z-index: 20; inset: 0; background: var(--warm-gradient);
     display: none; flex-direction: column; align-items: center;
-    justify-content: center; gap: 16px; padding: 24px; box-sizing: border-box;
+    /* top-anchored (was centred) to match the same 60px top as every
+       other screen — centring let the message+video pair float wherever
+       their combined height happened to land */
+    justify-content: flex-start; gap: 16px; padding: 60px 24px 24px; box-sizing: border-box;
   }
   #result video { max-width: 92vw; max-height: 65vh; border-radius: 12px; }
   #uploadStatus { color: var(--accent-brown); font-size: 20px; text-align: center; }
