@@ -237,6 +237,10 @@ startBtn.addEventListener('click', async () => {
   // the same top position, a stale "เหลือเวลาอีก..." from the guest's
   // PREVIOUS clip visibly collides with the new hint on every retry.
   status.textContent = '';
+  // Size/position the placeholder box now, before the camera resolves —
+  // otherwise it sits at the browser's default 300x150 canvas size in the
+  // corner until loop()'s first real frame runs.
+  positionPreviewBox();
 
   await startCamera();
 
@@ -443,34 +447,13 @@ const handednessHistory = [[], []];
 const GEOMETRY_WINDOW = 5;
 const geometryHistory = [[], []];
 
-function loop() {
-  if (!cameraActive) return; // stops the rAF chain — see cameraActive's comment
-  if (video.currentTime !== lastVideoTime) {
-    lastVideoTime = video.currentTime;
-    try {
-      const faceResult = faceLandmarker.detectForVideo(video, performance.now());
-      latestFaces = faceResult.faceLandmarks || [];
-    } catch (err) { console.warn('face detection skipped:', err); }
-    try {
-      const handResult = handLandmarker.detectForVideo(video, performance.now());
-      latestHands = handResult.landmarks || [];
-      latestHandedness = handResult.handednesses || [];
-    } catch (err) { console.warn('hand detection skipped:', err); }
-  }
-
-  const vw = video.videoWidth, vh = video.videoHeight;
-  if (!vw) { requestAnimationFrame(loop); return; }
-
-  // Issue #8: the canvas BACKING STORE is the staff preset's true pixel size,
-  // so captureStream — and therefore every recorded clip — comes out exactly
-  // 1080x1920 (or whichever preset) no matter what phone this is. Assigning
-  // width/height also clears the canvas, so only do it on a real change; the
-  // cover-fit drawImage below repaints every pixel each frame anyway.
-  if (out.width !== settings.outputWidth || out.height !== settings.outputHeight) {
-    out.width = settings.outputWidth;
-    out.height = settings.outputHeight;
-  }
-
+// Sizes/positions #outCanvas to the staff preset's aspect ratio. Split out
+// of loop() so it can also run once, immediately, when the idle screen
+// first appears — before the camera/loop() are even running — so the
+// placeholder box is already the right shape instead of the browser's
+// default 300x150 canvas size sitting in the corner for a couple seconds
+// while getUserMedia resolves.
+function positionPreviewBox() {
   // CSS then displays that fixed-size canvas scaled down into a box of the
   // same ratio, fitted inside the screen with an even edge gap — same
   // composition the guest sees, just at screen size rather than clip size.
@@ -503,6 +486,37 @@ function loop() {
   out.style.height = `${Math.round(box.height)}px`;
   out.style.left = `${Math.round(box.x)}px`;
   out.style.top = `${Math.round(box.y)}px`;
+}
+
+function loop() {
+  if (!cameraActive) return; // stops the rAF chain — see cameraActive's comment
+  if (video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+    try {
+      const faceResult = faceLandmarker.detectForVideo(video, performance.now());
+      latestFaces = faceResult.faceLandmarks || [];
+    } catch (err) { console.warn('face detection skipped:', err); }
+    try {
+      const handResult = handLandmarker.detectForVideo(video, performance.now());
+      latestHands = handResult.landmarks || [];
+      latestHandedness = handResult.handednesses || [];
+    } catch (err) { console.warn('hand detection skipped:', err); }
+  }
+
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw) { requestAnimationFrame(loop); return; }
+
+  // Issue #8: the canvas BACKING STORE is the staff preset's true pixel size,
+  // so captureStream — and therefore every recorded clip — comes out exactly
+  // 1080x1920 (or whichever preset) no matter what phone this is. Assigning
+  // width/height also clears the canvas, so only do it on a real change; the
+  // cover-fit drawImage below repaints every pixel each frame anyway.
+  if (out.width !== settings.outputWidth || out.height !== settings.outputHeight) {
+    out.width = settings.outputWidth;
+    out.height = settings.outputHeight;
+  }
+
+  positionPreviewBox();
 
   const scale = Math.max(out.width / vw, out.height / vh);
   const dx = (out.width - vw * scale) / 2;
