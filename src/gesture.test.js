@@ -331,7 +331,7 @@ describe('gestureHintText', () => {
   });
 
   it('uses the literal Thai hint for peace', () => {
-    expect(gestureHintText('peace')).toBe('ลองชูสองนิ้วดู ✌️\nมือซ้ายทีมอิท · มือขวาทีมโบ');
+    expect(gestureHintText('peace')).toBe('ชู 2 นิ้ว ✌ มือซ้ายทีมอิท · มือขวาทีมโบ');
   });
 
   // Matches detectGesture's default: an unknown/absent gesture_type behaves

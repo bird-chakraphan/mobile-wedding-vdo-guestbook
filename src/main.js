@@ -57,9 +57,7 @@ const entry   = document.getElementById('entry');
 const nameInput = document.getElementById('nameInput');
 const webviewNotice = document.getElementById('webviewNotice');
 const preRollEl = document.getElementById('preRoll');
-const canvasOverlay = document.getElementById('canvasOverlay');
 const gestureHint = document.getElementById('gestureHint');
-const timeLimitHint = document.getElementById('timeLimitHint');
 const startBtn = document.getElementById('startBtn');
 const status  = document.getElementById('status');
 const controls = document.getElementById('controls');
@@ -160,11 +158,9 @@ if (inWebview) {
   // Show the default gesture's hint immediately so the line is never blank,
   // then correct it once the staff's actual choice arrives.
   gestureHint.textContent = gestureHintText(settings.gestureType);
-  timeLimitHint.textContent = `มีเวลา ${settings.timeLimitSeconds} วิ ในการอัด 1 ครั้ง`;
   loadSettings(supabase).then(loaded => {
     settings = loaded;
     gestureHint.textContent = gestureHintText(settings.gestureType);
-    timeLimitHint.textContent = `มีเวลา ${settings.timeLimitSeconds} วิ ในการอัด 1 ครั้ง`;
     loadGestureImage('Left', settings.gestureLeftUrl);
     loadGestureImage('Right', settings.gestureRightUrl);
     loadFrameImage(settings.frameUrl);
@@ -223,7 +219,7 @@ startBtn.addEventListener('click', async () => {
 
   entry.style.display = 'none';
   controls.style.display = 'flex';
-  canvasOverlay.style.display = 'flex';
+  gestureHint.style.display = 'block';
   requestAnimationFrame(loop);
 });
 
@@ -470,7 +466,20 @@ function loop() {
   // means the box always shrinks to leave it clear, never overlaps it.
   const controlsRect = controls.getBoundingClientRect();
   const bottomReserve = (availH - controlsRect.top) + 28;
-  const topReserve = 60; // minimum top gap, independent of the 24px side pad
+
+  // #gestureHint sits ABOVE the canvas now (was overlaid inside it) at the
+  // same 60px top anchor used by #entryHero/#result's content. It's
+  // positioned FIRST, then its real measured height (1 line vs. point-up's
+  // 2 lines) decides how far down the canvas box starts — a fixed topPad
+  // would either collide with a 2-line hint or leave a wasteful gap under
+  // a 1-line one. Hidden during pre-roll/recording, so falls back to the
+  // plain 60px anchor with no hint to clear.
+  const TOP_ANCHOR = 60;
+  let topReserve = TOP_ANCHOR;
+  if (gestureHint.style.display !== 'none') {
+    gestureHint.style.top = `${TOP_ANCHOR}px`;
+    topReserve = gestureHint.getBoundingClientRect().bottom + 28;
+  }
 
   const box = previewBox(availW, availH,
     settings.outputWidth, settings.outputHeight, pad, bottomReserve, topReserve);
@@ -478,14 +487,6 @@ function loop() {
   out.style.height = `${Math.round(box.height)}px`;
   out.style.left = `${Math.round(box.x)}px`;
   out.style.top = `${Math.round(box.y)}px`;
-
-  // #canvasOverlay carries the gesture hint + time-limit text and must sit
-  // exactly on top of #outCanvas — unlike the canvas it's NOT mirrored, so
-  // it needs its own explicit position rather than sharing the CSS transform.
-  canvasOverlay.style.left = out.style.left;
-  canvasOverlay.style.top = out.style.top;
-  canvasOverlay.style.width = out.style.width;
-  canvasOverlay.style.height = out.style.height;
 
   const scale = Math.max(out.width / vw, out.height / vh);
   const dx = (out.width - vw * scale) / 2;
@@ -603,7 +604,7 @@ function setRecordingActive(active) {
 function runPreRoll() {
   preRolling = true;
   setRecordingActive(true);
-  canvasOverlay.style.display = 'none';
+  gestureHint.style.display = 'none';
   recordBtn.style.display = 'none';
   stopBtn.style.display = 'inline-flex';
   stopBtn.disabled = true;
@@ -644,7 +645,7 @@ function beginRecording() {
     recordBtn.style.display = 'inline-flex';
     stopBtn.style.display = 'none';
     stopBtn.disabled = false;
-    canvasOverlay.style.display = 'flex';
+    gestureHint.style.display = 'block';
     return;
   }
 

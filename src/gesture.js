@@ -108,7 +108,7 @@ export const GESTURE_OPTIONS = [
   },
   {
     value: 'peace', label: 'Peace ✌️', hintName: 'a peace sign ✌️',
-    hintText: 'ลองชูสองนิ้วดู ✌️\nมือซ้ายทีมอิท · มือขวาทีมโบ'
+    hintText: 'ชู 2 นิ้ว ✌ มือซ้ายทีมอิท · มือขวาทีมโบ'
   },
 ];
 
