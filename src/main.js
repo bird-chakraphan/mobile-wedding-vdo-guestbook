@@ -220,6 +220,12 @@ startBtn.addEventListener('click', async () => {
   entry.style.display = 'none';
   controls.style.display = 'flex';
   gestureHint.style.display = 'block';
+  // #status is never cleared once the recording countdown sets it (it just
+  // sits there — no display toggling of its own) — invisible on the first
+  // loop since gestureHint used to live elsewhere, but now that they share
+  // the same top position, a stale "เหลือเวลาอีก..." from the guest's
+  // PREVIOUS clip visibly collides with the new hint on every retry.
+  status.textContent = '';
   requestAnimationFrame(loop);
 });
 
@@ -637,7 +643,9 @@ function beginRecording() {
     recordBtn.style.display = 'inline-flex';
     stopBtn.style.display = 'none';
     stopBtn.disabled = false;
-    gestureHint.style.display = 'block';
+    // gestureHint deliberately stays hidden here — it shares #status's exact
+    // position, and the error message above is the more important thing for
+    // the guest to see right now.
     return;
   }
 
