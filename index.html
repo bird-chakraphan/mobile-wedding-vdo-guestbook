@@ -104,7 +104,11 @@
       JS-computed size */
     transform: scaleX(-1); /* selfie mirror */
     border-radius: 12px; border: 1px solid #ddddbe;
-    background: var(--canvas-placeholder); /* brief flash before first frame */
+    background: var(--canvas-placeholder);
+    /* hidden until loop() reveals it on the first real camera frame (see
+       main.js) — an empty placeholder box popping in ahead of the actual
+       feed read as a jarring extra step, not a smooth loading state */
+    display: none;
   }
 
   /* Sits above #outCanvas (not overlaid inside it) — per Bird's Figma
@@ -236,6 +240,9 @@
   #result video {
     max-width: 92vw; max-height: 65vh; box-sizing: border-box;
     border-radius: 12px; border: 1px solid #ddddbe;
+    /* hidden until main.js's loadeddata listener reveals it — same reasoning
+       as #outCanvas: no empty box before the clip is actually ready */
+    display: none;
   }
   #uploadStatus { color: var(--accent-brown); font-size: 20px; text-align: center; }
   /* pinned to the bottom like every other screen's button(s), rather than

@@ -66,6 +66,10 @@ const recordBtn = document.getElementById('recordBtn');
 const stopBtn = document.getElementById('stopBtn');
 const result = document.getElementById('result');
 const previewVideo = document.getElementById('previewVideo');
+// Reveals the clip only once it actually has a frame to show (see
+// #result video's CSS) instead of an empty box while it decodes — the
+// element persists across retries, so this listener is registered once.
+previewVideo.addEventListener('loadeddata', () => { previewVideo.style.display = 'block'; });
 const uploadStatus = document.getElementById('uploadStatus');
 const saveBtn = document.getElementById('saveBtn');
 const downloadLink = document.getElementById('downloadLink');
@@ -237,10 +241,11 @@ startBtn.addEventListener('click', async () => {
   // the same top position, a stale "เหลือเวลาอีก..." from the guest's
   // PREVIOUS clip visibly collides with the new hint on every retry.
   status.textContent = '';
-  // Size/position the placeholder box now, before the camera resolves —
-  // otherwise it sits at the browser's default 300x150 canvas size in the
-  // corner until loop()'s first real frame runs.
-  positionPreviewBox();
+  // Stays hidden (see #outCanvas's CSS) until loop() reveals it on the
+  // first real camera frame — on a retry this resets it back to hidden
+  // instead of showing a frozen frame from the previous recording while
+  // the new camera stream warms up.
+  out.style.display = 'none';
 
   await startCamera();
 
@@ -506,6 +511,10 @@ function loop() {
   const vw = video.videoWidth, vh = video.videoHeight;
   if (!vw) { requestAnimationFrame(loop); return; }
 
+  // First real frame — reveal the canvas now instead of the moment the
+  // idle screen appeared (see #outCanvas's CSS).
+  out.style.display = 'block';
+
   // Issue #8: the canvas BACKING STORE is the staff preset's true pixel size,
   // so captureStream — and therefore every recorded clip — comes out exactly
   // 1080x1920 (or whichever preset) no matter what phone this is. Assigning
@@ -743,6 +752,9 @@ function onRecordingStop() {
   const filename = buildFilename(mimeType, new Date(), sanitizeName(guestName));
   const url = URL.createObjectURL(blob);
 
+  // Reset to hidden first — on a 2nd+ loop this element still shows the
+  // PREVIOUS clip's last frame until 'loadeddata' fires for the new one.
+  previewVideo.style.display = 'none';
   previewVideo.src = url;
   // The `muted`/`loop` HTML attributes alone are unreliable when src is set
   // dynamically on an already-existing element (vs. a fresh page load) —
