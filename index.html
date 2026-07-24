@@ -45,8 +45,9 @@
     --accent-peach: #f8ad7c;
     --accent-peach-border: #c1bf89;
     --accent-brown: #743f17;
-    --ghost-bg: #ffece0;
-    --ghost-border: #ffddc6;
+    --ghost-bg: #ffdbc4;
+    --ghost-border: #f0ae84;
+    --ghost-text: #ca8133;
     --canvas-placeholder: #1c1c29;
   }
 
@@ -169,7 +170,7 @@
     border: 1px solid; text-decoration: none; text-align: center; cursor: pointer;
   }
   .pillPrimary { background: var(--accent-peach); border-color: var(--accent-peach-border); color: var(--accent-brown); }
-  .pillGhost { background: var(--ghost-bg); border-color: var(--ghost-border); color: var(--accent-peach); }
+  .pillGhost { background: var(--ghost-bg); border-color: var(--ghost-border); color: var(--ghost-text); }
   #startBtn:disabled { opacity: .5; cursor: not-allowed; }
   #stopBtn:disabled { opacity: .5; cursor: default; }
 
@@ -267,7 +268,7 @@
 
 <div id="result">
   <div id="uploadStatus"></div>
-  <video id="previewVideo" controls playsinline></video>
+  <video id="previewVideo" controls playsinline muted></video>
   <div id="resultActions">
     <button id="retryBtn" class="pill pillGhost">อัดอีกรอบ</button>
     <button id="saveBtn" class="pill pillPrimary" style="display:none">โหลดคลิป</button>
