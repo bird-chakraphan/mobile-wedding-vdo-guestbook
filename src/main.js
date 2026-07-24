@@ -128,7 +128,6 @@ async function loadModels() {
   catch { handLandmarker = await createHandLandmarker("CPU"); }
 
   modelsReady = true;
-  startBtn.textContent = "พร้อมแล้ว กดเลย";
   refreshStartButton();
 }
 
@@ -137,7 +136,12 @@ async function loadModels() {
 let modelsReady = false;
 
 function refreshStartButton() {
-  startBtn.disabled = !modelsReady || nameInput.value.trim() === '';
+  const nameFilled = nameInput.value.trim() !== '';
+  startBtn.disabled = !modelsReady || !nameFilled;
+  // Only override the "Loading AI models…" label once loading has
+  // actually finished — before that, disabled state is the models, not
+  // the name, and swapping to "ใส่ชื่อด้านบน" would blame the wrong thing.
+  if (modelsReady) startBtn.textContent = nameFilled ? 'เริ่มเลย' : 'ใส่ชื่อด้านบน';
 }
 
 nameInput.addEventListener('input', refreshStartButton);
@@ -215,13 +219,15 @@ function stopCamera() {
 }
 
 startBtn.addEventListener('click', async () => {
-  await startCamera();
   guestName = nameInput.value;
 
-  for (const c of [blurCanvas, maskCanvas, skinCanvas, compCanvas]) {
-    c.width = video.videoWidth; c.height = video.videoHeight;
-  }
-
+  // Land on the idle screen right away instead of sitting on Entry through
+  // the camera permission prompt + getUserMedia warm-up (a real, visible
+  // delay with zero feedback otherwise — felt like the tap did nothing).
+  // The gesture hint/Record button appear immediately; the preview box
+  // itself only starts drawing once startCamera() below resolves and
+  // loop() begins, so guests see it fill in 1-2s later instead of staring
+  // at a frozen Entry screen.
   entry.style.display = 'none';
   controls.style.display = 'flex';
   gestureHint.style.display = 'block';
@@ -231,6 +237,13 @@ startBtn.addEventListener('click', async () => {
   // the same top position, a stale "เหลือเวลาอีก..." from the guest's
   // PREVIOUS clip visibly collides with the new hint on every retry.
   status.textContent = '';
+
+  await startCamera();
+
+  for (const c of [blurCanvas, maskCanvas, skinCanvas, compCanvas]) {
+    c.width = video.videoWidth; c.height = video.videoHeight;
+  }
+
   requestAnimationFrame(loop);
 });
 
@@ -595,12 +608,13 @@ recordBtn.addEventListener('click', () => {
 // Keeps iOS Safari's status bar/toolbar chrome (theme-color) matching
 // whichever background body.recording-active currently selects, instead
 // of it defaulting to a stark white bar over the warm gradient.
-// The idle value is --warm-solid from index.html (the gradient's top-edge
-// colour, so the chrome blends into the content with no seam) — keep the two
-// in sync; recording goes solid black to match body.recording-active.
+// The idle value is --warm-solid from index.html (same #fae6dc as the
+// gradient's own top stop, so the chrome blends into the content with no
+// seam) — keep the two in sync; recording goes solid black to match
+// body.recording-active.
 function setRecordingActive(active) {
   document.body.classList.toggle('recording-active', active);
-  if (themeColorMeta) themeColorMeta.content = active ? '#000000' : '#fbefe9';
+  if (themeColorMeta) themeColorMeta.content = active ? '#000000' : '#fae6dc';
 }
 
 // 3-second on-screen countdown so the guest can get ready — recording

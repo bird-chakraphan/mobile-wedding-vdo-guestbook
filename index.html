@@ -8,7 +8,7 @@
      white bar over the warm gradient background. Kept in sync with
      body.recording-active in main.js since the page background itself
      switches to black during pre-roll/recording. -->
-<meta name="theme-color" content="#fbefe9">
+<meta name="theme-color" content="#fae6dc">
 <title>Wedding VDO Guest Book</title>
 <style>
   /* Self-hosted rather than linked from Google Fonts: guests join over
@@ -46,16 +46,16 @@
 
   :root {
     /* warm cream/peach look from Bird's Figma redesign — one place to
-       tweak the palette rather than repeating hex values per element */
-    --warm-gradient: radial-gradient(120% 90% at 28% 22%, #fae6dc 0%, #ffffff 65%);
-    /* solid backing colour for the gradient surfaces. NOT the gradient's
-       #fae6dc anchor (its warm centre) — that's the darkest point, and iOS
-       paints its status-bar/toolbar chrome from this solid colour, leaving a
-       visible seam where the dark strip met the much lighter gradient right
-       below it. Sampled from the gradient's actual colour at its TOP EDGE so
-       the chrome and the content meet with no line. Keep the theme-color meta
-       and main.js's idle theme-color literal in sync with this. */
-    --warm-solid: #fbefe9;
+       tweak the palette rather than repeating hex values per element.
+       Top-to-bottom linear gradient per Figma node 1:3's
+       bg-gradient-to-b (from-[#fae6dc] to-white). */
+    --warm-gradient: linear-gradient(to bottom, #fae6dc 0%, #ffffff 100%);
+    /* solid backing colour for the gradient surfaces — iOS paints its
+       status-bar/toolbar chrome from this, not from the gradient image.
+       Same #fae6dc as the gradient's own top stop, so the chrome and the
+       content meet with no seam. Keep the theme-color meta and main.js's
+       idle theme-color literal in sync with this. */
+    --warm-solid: #fae6dc;
     --accent-peach: #f8ad7c;
     --accent-peach-border: #c1bf89;
     --accent-brown: #743f17;
@@ -133,7 +133,7 @@
   #entry {
     position: absolute; z-index: 10; inset: 0; background: var(--warm-solid) var(--warm-gradient);
     display: flex; flex-direction: column; align-items: center;
-    justify-content: flex-start; gap: 56px; color: var(--accent-brown); text-align: center;
+    justify-content: flex-start; gap: 40px; color: var(--accent-brown); text-align: center;
     /* top raised from Figma's exact 40px to 60px so it lines up with the
        camera preview box's top on the idle/recording screens (topPad in
        main.js's previewBox call) — consistent top across every screen */
@@ -144,7 +144,7 @@
     border-radius: 12px; flex-shrink: 0;
   }
   /* heading + input as one group (mirrors Figma's own "Container" grouping)
-     so the 56px image gap and 20px heading-to-input gap can differ */
+     so the 40px image gap and 20px heading-to-input gap can differ */
   #entryFields {
     display: flex; flex-direction: column; align-items: center;
     gap: 20px; width: 100%; max-width: 400px;
@@ -266,7 +266,7 @@
   <button id="startBtn" class="pill pillPrimary" disabled>Loading AI models…</button>
   <div id="privacyNote">
     <img src="/lock-icon.svg" alt="">
-    <span>ข้อมูลของคุณจะถูกเก็บเป็นความลับ</span>
+    <span>ระบบจะขออนุญาตเปิดกล้อง ข้อมูลของ คุณจะเป็นความลับ</span>
   </div>
 </div>
 
