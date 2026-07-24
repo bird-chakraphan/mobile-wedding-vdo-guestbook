@@ -142,6 +142,13 @@ function refreshStartButton() {
 
 nameInput.addEventListener('input', refreshStartButton);
 
+// Enter acts like tapping Start — nameInput isn't inside a <form>, so Enter
+// does nothing by default. Respects the same disabled state (models not
+// ready yet, or the name is still blank) rather than bypassing it.
+nameInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !startBtn.disabled) startBtn.click();
+});
+
 // In-app webviews (LINE/IG/FB) break camera access — show the bilingual
 // "open in browser" screen and load nothing else.
 const inWebview = isInAppWebview(navigator.userAgent);
