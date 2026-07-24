@@ -26,7 +26,7 @@ import { isInAppWebview } from './webview.js';
 // keep everything working if the fetch fails).
 let settings = { ...SETTINGS_DEFAULTS };
 
-const PRE_ROLL_SECONDS = 5;
+const PRE_ROLL_SECONDS = 3;
 
 // Known risk (CONTEXT.md / TESTED-LEARNINGS.md): MediaPipe's handedness
 // label may be swapped relative to what the guest sees in the mirrored
@@ -595,30 +595,44 @@ function setRecordingActive(active) {
   if (themeColorMeta) themeColorMeta.content = active ? '#000000' : '#fae6dc';
 }
 
-// 5-second on-screen countdown so the guest can get ready — recording
-// only starts when it hits zero. The Stop button is shown dimmed/disabled
-// throughout (per the reference design) as a preview of what's coming;
-// beginRecording() below re-enables it once recording actually starts.
+// 3-second on-screen countdown so the guest can get ready — recording
+// only starts when it hits zero. The Stop button is clickable throughout
+// (see stopBtn's click listener below) — tapping it cancels back to idle
+// instead of waiting out the countdown.
+let preRollTick = null;
+
 function runPreRoll() {
   preRolling = true;
   setRecordingActive(true);
   gestureHint.style.display = 'none';
   recordBtn.style.display = 'none';
   stopBtn.style.display = 'inline-flex';
-  stopBtn.disabled = true;
   preRollEl.style.display = 'flex';
   preRollEl.textContent = String(PRE_ROLL_SECONDS);
   const started = performance.now();
-  const tick = setInterval(() => {
+  preRollTick = setInterval(() => {
     const remaining = preRollRemaining(performance.now() - started, PRE_ROLL_SECONDS);
     preRollEl.textContent = remaining > 0 ? String(remaining) : '';
     if (remaining <= 0) {
-      clearInterval(tick);
+      clearInterval(preRollTick);
       preRollEl.style.display = 'none';
       preRolling = false;
       beginRecording();
     }
   }, 100);
+}
+
+// Cancels the countdown and returns to the idle screen — same visible
+// state as before Record was pressed, nothing partially applied.
+function cancelPreRoll() {
+  if (!preRolling) return;
+  clearInterval(preRollTick);
+  preRolling = false;
+  preRollEl.style.display = 'none';
+  setRecordingActive(false);
+  recordBtn.style.display = 'inline-flex';
+  stopBtn.style.display = 'none';
+  gestureHint.style.display = 'block';
 }
 
 function beginRecording() {
@@ -671,7 +685,10 @@ function beginRecording() {
   recordTimeout = setTimeout(stopRecording, settings.timeLimitSeconds * 1000);
 }
 
-stopBtn.addEventListener('click', stopRecording);
+stopBtn.addEventListener('click', () => {
+  if (preRolling) { cancelPreRoll(); return; }
+  stopRecording();
+});
 
 function stopRecording() {
   if (!recording) return;

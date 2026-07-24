@@ -26,7 +26,7 @@ A camera web app for wedding guests to record video messages ("clips") for the c
 - **Staff Page protection**: simple passcode gate on /staff; settings-writes require the passcode. Threat model is a curious guest, not a hacker.
 - **Upload timing**: upload starts immediately when recording ends, in the background, while the Guest watches the preview. "Record again" adds a new Clip; all takes are kept for the Couple.
 - **File naming**: `SanitizedGuestName_YYYY-MM-DD_HHMM.webm`; the exact name as typed (Thai/emoji ok) is stored in the settings DB alongside the clip record.
-- **Time limit**: staff-configurable, default 60 seconds; countdown warning during the last 10 seconds; 5-second pre-roll countdown before recording starts.
+- **Time limit**: staff-configurable, default 60 seconds; countdown warning during the last 10 seconds; 3-second pre-roll countdown before recording starts (clicking Stop during pre-roll cancels back to idle instead of starting).
 - **In-app browsers**: guests may scan the QR from LINE/Instagram etc. (cannot be controlled). Detect webviews and show a Thai+English instruction screen ("tap ⋯ → Open in Browser") before the flow starts.
 - **Stack**: vanilla JS + Vite static site, supabase-js, MediaPipe tasks-vision; deployed on Vercel. No framework — stays closest to the proven prototypes.
 
