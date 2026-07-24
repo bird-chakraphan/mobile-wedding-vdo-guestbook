@@ -142,12 +142,15 @@
        pill's shrink-to-fit sizing (it stretched wide and wrapped the
        text) — width:max-content restores hug-content sizing */
     position: absolute; z-index: 11; left: 50%; transform: translateX(-50%);
-    bottom: calc(84px + env(safe-area-inset-bottom, 0px));
+    bottom: calc(40px + env(safe-area-inset-bottom, 0px));
     width: max-content; white-space: nowrap;
   }
 
   #privacyNote {
-    position: absolute; z-index: 11; bottom: calc(40px + env(safe-area-inset-bottom, 0px));
+    /* 40 (startBtn's own offset) + ~56 (its real rendered height — taller
+       than Figma's estimate, see TESTED-LEARNINGS.md, from Thai tone-mark
+       line-height) + 16px clear gap, rounded up for safety margin */
+    position: absolute; z-index: 11; bottom: calc(116px + env(safe-area-inset-bottom, 0px));
     left: 50%; transform: translateX(-50%);
     display: flex; align-items: center; gap: 8px; white-space: nowrap;
     color: rgba(82,68,59,.6); font-size: 12px; letter-spacing: .5px;
