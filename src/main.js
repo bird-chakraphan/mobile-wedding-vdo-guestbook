@@ -49,6 +49,7 @@ const HAND_BONES = [
   [0,17],[17,18],[18,19],[19,20]  // pinky
 ];
 
+const themeColorMeta = document.querySelector('meta[name="theme-color"]');
 const video   = document.getElementById('video');
 const out     = document.getElementById('outCanvas');
 const octx    = out.getContext('2d');
@@ -587,13 +588,21 @@ recordBtn.addEventListener('click', () => {
   runPreRoll();
 });
 
+// Keeps iOS Safari's status bar/toolbar chrome (theme-color) matching
+// whichever background body.recording-active currently selects, instead
+// of it defaulting to a stark white bar over the warm gradient.
+function setRecordingActive(active) {
+  document.body.classList.toggle('recording-active', active);
+  if (themeColorMeta) themeColorMeta.content = active ? '#000000' : '#fae6dc';
+}
+
 // 5-second on-screen countdown so the guest can get ready — recording
 // only starts when it hits zero. The Stop button is shown dimmed/disabled
 // throughout (per the reference design) as a preview of what's coming;
 // beginRecording() below re-enables it once recording actually starts.
 function runPreRoll() {
   preRolling = true;
-  document.body.classList.add('recording-active');
+  setRecordingActive(true);
   canvasOverlay.style.display = 'none';
   recordBtn.style.display = 'none';
   stopBtn.style.display = 'inline-flex';
@@ -628,7 +637,7 @@ function beginRecording() {
     ]);
   } catch (err) {
     console.error('could not capture the canvas:', err);
-    document.body.classList.remove('recording-active');
+    setRecordingActive(false);
     status.textContent = 'Could not start recording — please reload the page.';
     status.classList.add('warning');
     controls.style.display = 'flex';
@@ -674,7 +683,7 @@ function stopRecording() {
 
 function onRecordingStop() {
   stopCamera();
-  document.body.classList.remove('recording-active');
+  setRecordingActive(false);
 
   const blob = new Blob(chunks, { type: mimeType || 'video/webm' });
   const filename = buildFilename(mimeType, new Date(), sanitizeName(guestName));

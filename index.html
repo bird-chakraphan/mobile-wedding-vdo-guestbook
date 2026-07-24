@@ -3,6 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- iOS Safari colors its status bar/toolbar chrome from this (defaults to
+     white when absent) — without it, the status bar area sits as a stark
+     white bar over the warm gradient background. Kept in sync with
+     body.recording-active in main.js since the page background itself
+     switches to black during pre-roll/recording. -->
+<meta name="theme-color" content="#fae6dc">
 <title>Wedding VDO Guest Book</title>
 <style>
   /* Self-hosted rather than linked from Google Fonts: guests join over
