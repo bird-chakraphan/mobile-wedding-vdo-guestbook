@@ -18,7 +18,12 @@ export const SETTINGS_DEFAULTS = {
   gestureScale: 100,
   frameUrl: null,
   gestureLeftUrl: null,
-  gestureRightUrl: null
+  gestureRightUrl: null,
+  // Unlike frame/gesture graphics (optional — null means "no overlay"), the
+  // entry screen always needs SOME photo. Default is the bundled static
+  // file, so an unset/cleared hero_url falls back to it rather than to
+  // nothing.
+  heroUrl: '/entry-hero.png'
 };
 
 // Columns present since the first release. Newer columns are appended in
@@ -27,7 +32,7 @@ export const SETTINGS_DEFAULTS = {
 // which default) instead of erroring into all-defaults.
 const BASE_COLUMNS =
   'time_limit_seconds,beauty_smooth,beauty_glow,beauty_vshape,beauty_narrow,output_width,output_height,frame_url,gesture_left_url,gesture_right_url';
-const COLUMNS = `${BASE_COLUMNS},gesture_type,gesture_scale`;
+const COLUMNS = `${BASE_COLUMNS},gesture_type,gesture_scale,hero_url`;
 
 function queryRow(client, columns, timeoutMs) {
   const query = client.from('staff_settings').select(columns).eq('id', 1).single();
@@ -57,7 +62,8 @@ export async function loadSettings(client, { timeoutMs = 4000 } = {}) {
       gestureScale: data.gesture_scale ?? SETTINGS_DEFAULTS.gestureScale,
       frameUrl: data.frame_url ?? SETTINGS_DEFAULTS.frameUrl,
       gestureLeftUrl: data.gesture_left_url ?? SETTINGS_DEFAULTS.gestureLeftUrl,
-      gestureRightUrl: data.gesture_right_url ?? SETTINGS_DEFAULTS.gestureRightUrl
+      gestureRightUrl: data.gesture_right_url ?? SETTINGS_DEFAULTS.gestureRightUrl,
+      heroUrl: data.hero_url ?? SETTINGS_DEFAULTS.heroUrl
     };
   } catch {
     return { ...SETTINGS_DEFAULTS };

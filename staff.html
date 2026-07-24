@@ -133,6 +133,13 @@
       <label><span>Graphic size: <span id="gestureScaleVal"></span>%</span>
         <input id="gestureScaleInput" type="range" min="25" max="200">
       </label>
+      <label><span>Entry screen photo</span>
+        <input id="heroFileInput" type="file" accept="image/*">
+      </label>
+      <div class="assetCurrent" id="heroCurrent">
+        <img class="assetThumb" id="heroPreview" alt="Current entry screen photo">
+        <button type="button" class="assetRemove" id="heroRemoveBtn">Remove</button>
+      </div>
       <label><span>Frame overlay (optional, transparent PNG)</span>
         <input id="frameFileInput" type="file" accept="image/*">
       </label>

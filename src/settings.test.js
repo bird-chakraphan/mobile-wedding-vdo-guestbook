@@ -30,7 +30,8 @@ describe('loadSettings', () => {
         gesture_scale: 150,
         frame_url: 'https://example.com/frame.png',
         gesture_left_url: null,
-        gesture_right_url: 'https://example.com/right.png'
+        gesture_right_url: 'https://example.com/right.png',
+        hero_url: 'https://example.com/hero.png'
       },
       error: null
     });
@@ -46,6 +47,7 @@ describe('loadSettings', () => {
     expect(settings.frameUrl).toBe('https://example.com/frame.png');
     expect(settings.gestureLeftUrl).toBeNull();
     expect(settings.gestureRightUrl).toBe('https://example.com/right.png');
+    expect(settings.heroUrl).toBe('https://example.com/hero.png');
   });
 
   it('returns defaults when the query errors, so the guest page never breaks offline', async () => {
@@ -88,6 +90,7 @@ describe('loadSettings', () => {
     expect(settings.frameUrl).toBe('https://example.com/frame.png');
     expect(settings.gestureType).toBe(SETTINGS_DEFAULTS.gestureType); // new field defaults
     expect(settings.gestureScale).toBe(SETTINGS_DEFAULTS.gestureScale);
+    expect(settings.heroUrl).toBe(SETTINGS_DEFAULTS.heroUrl);
   });
 
   it('fills defaults for individual missing columns', async () => {
@@ -99,5 +102,6 @@ describe('loadSettings', () => {
     expect(settings.beautyNarrow).toBe(SETTINGS_DEFAULTS.beautyNarrow);
     expect(settings.gestureType).toBe(SETTINGS_DEFAULTS.gestureType);
     expect(settings.gestureScale).toBe(SETTINGS_DEFAULTS.gestureScale);
+    expect(settings.heroUrl).toBe(SETTINGS_DEFAULTS.heroUrl);
   });
 });

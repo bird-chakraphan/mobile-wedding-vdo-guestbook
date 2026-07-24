@@ -54,6 +54,7 @@ const video   = document.getElementById('video');
 const out     = document.getElementById('outCanvas');
 const octx    = out.getContext('2d');
 const entry   = document.getElementById('entry');
+const entryHero = document.getElementById('entryHero');
 const nameInput = document.getElementById('nameInput');
 const webviewNotice = document.getElementById('webviewNotice');
 const preRollEl = document.getElementById('preRoll');
@@ -161,6 +162,10 @@ if (inWebview) {
   loadSettings(supabase).then(loaded => {
     settings = loaded;
     gestureHint.textContent = gestureHintText(settings.gestureType);
+    // entryHero's HTML already points at the same static file as
+    // SETTINGS_DEFAULTS.heroUrl, so this is a no-op unless staff has
+    // uploaded a custom photo.
+    entryHero.src = settings.heroUrl;
     loadGestureImage('Left', settings.gestureLeftUrl);
     loadGestureImage('Right', settings.gestureRightUrl);
     loadFrameImage(settings.frameUrl);

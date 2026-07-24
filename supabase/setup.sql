@@ -72,6 +72,7 @@ create table if not exists public.staff_settings (
 -- EXISTS above would skip them). New columns go here as the schema grows.
 alter table public.staff_settings add column if not exists gesture_type  text not null default 'mini-heart';
 alter table public.staff_settings add column if not exists gesture_scale int  not null default 100;
+alter table public.staff_settings add column if not exists hero_url     text;
 
 insert into public.staff_settings (id)
 values (1)
@@ -130,7 +131,8 @@ create or replace function public.update_staff_settings(
   p_gesture_scale      int  default null,
   p_frame_url          text default null,
   p_gesture_left_url   text default null,
-  p_gesture_right_url  text default null
+  p_gesture_right_url  text default null,
+  p_hero_url           text default null
 )
 returns void
 language plpgsql
@@ -160,6 +162,7 @@ begin
     frame_url          = case when p_frame_url = '' then null else coalesce(p_frame_url, frame_url) end,
     gesture_left_url   = case when p_gesture_left_url = '' then null else coalesce(p_gesture_left_url, gesture_left_url) end,
     gesture_right_url  = case when p_gesture_right_url = '' then null else coalesce(p_gesture_right_url, gesture_right_url) end,
+    hero_url           = case when p_hero_url = '' then null else coalesce(p_hero_url, hero_url) end,
     updated_at         = now()
   where id = 1;
 end;
@@ -178,7 +181,7 @@ grant select (
   id, output_width, output_height, time_limit_seconds,
   beauty_smooth, beauty_glow, beauty_vshape, beauty_narrow,
   gesture_type, gesture_scale,
-  frame_url, gesture_left_url, gesture_right_url, updated_at
+  frame_url, gesture_left_url, gesture_right_url, hero_url, updated_at
 ) on public.staff_settings to anon;
 
 

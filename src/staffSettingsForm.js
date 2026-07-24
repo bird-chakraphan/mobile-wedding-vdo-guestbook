@@ -17,6 +17,7 @@ export function buildSettingsPayload(passcode, values) {
     p_gesture_scale: values.gestureScale,
     p_frame_url: values.frameUrl,
     p_gesture_left_url: values.gestureLeftUrl,
-    p_gesture_right_url: values.gestureRightUrl
+    p_gesture_right_url: values.gestureRightUrl,
+    p_hero_url: values.heroUrl
   };
 }

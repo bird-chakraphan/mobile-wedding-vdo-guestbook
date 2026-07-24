@@ -15,7 +15,8 @@ describe('buildSettingsPayload', () => {
       gestureScale: 120,
       frameUrl: 'https://example.com/frame.png',
       gestureLeftUrl: 'https://example.com/left.png',
-      gestureRightUrl: 'https://example.com/right.png'
+      gestureRightUrl: 'https://example.com/right.png',
+      heroUrl: 'https://example.com/hero.png'
     });
     expect(payload).toEqual({
       p_passcode: 'changeme',
@@ -30,7 +31,8 @@ describe('buildSettingsPayload', () => {
       p_gesture_scale: 120,
       p_frame_url: 'https://example.com/frame.png',
       p_gesture_left_url: 'https://example.com/left.png',
-      p_gesture_right_url: 'https://example.com/right.png'
+      p_gesture_right_url: 'https://example.com/right.png',
+      p_hero_url: 'https://example.com/hero.png'
     });
   });
 
@@ -47,6 +49,7 @@ describe('buildSettingsPayload', () => {
     expect(payload.p_frame_url).toBeUndefined();
     expect(payload.p_gesture_left_url).toBeUndefined();
     expect(payload.p_gesture_right_url).toBeUndefined();
+    expect(payload.p_hero_url).toBeUndefined();
   });
 
   it('passes an empty-string asset URL straight through as the RPC clear sentinel', () => {

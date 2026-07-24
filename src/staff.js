@@ -36,6 +36,7 @@ const status = document.getElementById('status');
 // thumbnail + Remove button. `slot`/`handLabel` route changes to the live
 // preview. `markedForRemoval`/`currentUrl` are mutated as staff edit.
 const ASSET_FIELDS = [
+  { slot: 'hero', handLabel: null, key: 'heroUrl', filename: 'hero' },
   { slot: 'frame', handLabel: null, key: 'frameUrl', filename: 'frame' },
   { slot: 'gesture', handLabel: 'Left', key: 'gestureLeftUrl', filename: 'gesture-left' },
   { slot: 'gesture', handLabel: 'Right', key: 'gestureRightUrl', filename: 'gesture-right' }
@@ -52,9 +53,12 @@ const ASSET_FIELDS = [
   };
 });
 
+// hero has no live-preview equivalent on the staff page — its "preview" is
+// the entry screen itself, which this page doesn't render. Only the
+// current-upload thumbnail (handled generically below) applies to it.
 function applyAssetToPreview(field, url) {
   if (field.slot === 'frame') loadFrameImage(url);
-  else loadGestureImage(field.handLabel, url);
+  else if (field.slot === 'gesture') loadGestureImage(field.handLabel, url);
 }
 
 function showCurrent(field, url) {
