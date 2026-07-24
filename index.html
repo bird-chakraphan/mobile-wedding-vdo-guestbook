@@ -102,10 +102,11 @@
   /* Sits above #outCanvas (not overlaid inside it) — per Bird's Figma
      update, moved out of the dark-canvas-overlay treatment entirely: brown
      text on the page's own warm background instead of white-on-video.
-     top is set per-frame in JS (loop()) to the same 60px anchor as
-     #outCanvas/#entryHero/#result's content; the canvas box's own top then
-     tracks this element's real measured bottom edge + a 28px gap, so a
-     2-line hint (e.g. point-up's) doesn't collide with the canvas. */
+     top matches #status's exact formula (same value, safe-area included)
+     so the text lands in the identical spot whether the guest is looking
+     at the idle hint or the recording countdown — outCanvas goes back to
+     a fixed topPad in loop() (matching pre-roll/recording) now that the
+     hint no longer needs to push it down. */
   /* gestureHintText (gesture.js) embeds a literal \n at the intended line
      break for some gestures (e.g. point-up) — plain text nodes ignore that
      and only wrap by width, so the browser was picking its own break
@@ -113,6 +114,7 @@
      break while still wrapping normally if a line runs long. */
   #gestureHint {
     position: absolute; z-index: 4; display: none; left: 50%; transform: translateX(-50%);
+    top: calc(16px + env(safe-area-inset-top, 0px));
     width: 100%; max-width: 400px; padding: 0 28px; box-sizing: border-box;
     color: var(--accent-brown); font-size: 16px; line-height: 1.5; text-align: center;
     white-space: pre-line;

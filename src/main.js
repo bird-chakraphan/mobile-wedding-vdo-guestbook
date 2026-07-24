@@ -467,19 +467,11 @@ function loop() {
   const controlsRect = controls.getBoundingClientRect();
   const bottomReserve = (availH - controlsRect.top) + 28;
 
-  // #gestureHint sits ABOVE the canvas now (was overlaid inside it) at the
-  // same 60px top anchor used by #entryHero/#result's content. It's
-  // positioned FIRST, then its real measured height (1 line vs. point-up's
-  // 2 lines) decides how far down the canvas box starts — a fixed topPad
-  // would either collide with a 2-line hint or leave a wasteful gap under
-  // a 1-line one. Hidden during pre-roll/recording, so falls back to the
-  // plain 60px anchor with no hint to clear.
-  const TOP_ANCHOR = 60;
-  let topReserve = TOP_ANCHOR;
-  if (gestureHint.style.display !== 'none') {
-    gestureHint.style.top = `${TOP_ANCHOR}px`;
-    topReserve = gestureHint.getBoundingClientRect().bottom + 28;
-  }
+  // Fixed 60px top, same as pre-roll/recording — #gestureHint now sits at
+  // #status's exact position (CSS, not JS — see index.html), well clear of
+  // this anchor, so the canvas box is the same size on all three screens
+  // (idle/pre-roll/recording) instead of shrinking under a taller hint.
+  const topReserve = 60;
 
   const box = previewBox(availW, availH,
     settings.outputWidth, settings.outputHeight, pad, bottomReserve, topReserve);
