@@ -102,7 +102,6 @@
   #outCanvas {
     position: absolute; box-sizing: border-box; /* border drawn inside the
       JS-computed size */
-    transform: scaleX(-1); /* selfie mirror */
     border-radius: 12px; border: 1px solid #ddddbe;
     background: var(--canvas-placeholder);
     /* hidden until loop() reveals it on the first real camera frame (see
@@ -110,6 +109,24 @@
        feed read as a jarring extra step, not a smooth loading state */
     display: none;
   }
+  /* front camera only (main.js toggles this on startCamera()) — the back
+     camera previews true-to-life, like every other camera app */
+  #outCanvas.mirrored { transform: scaleX(-1); }
+
+  /* front/back camera toggle — floated top-right, clear of the centred
+     gestureHint text. Same translucent-dark-circle treatment as staff.html's
+     #viewToggle so it reads clearly over any camera feed. */
+  #switchCameraBtn {
+    position: absolute; z-index: 6;
+    top: calc(16px + env(safe-area-inset-top, 0px));
+    right: 16px; width: 40px; height: 40px; padding: 0;
+    display: none; align-items: center; justify-content: center;
+    border-radius: 50%; border: 1px solid rgba(255,255,255,.35);
+    background: rgba(0,0,0,.4); color: #fff; cursor: pointer;
+    backdrop-filter: blur(8px);
+  }
+  #switchCameraBtn:disabled { opacity: .4; cursor: default; }
+  #switchCameraBtn svg { width: 20px; height: 20px; display: block; }
 
   /* Sits above #outCanvas (not overlaid inside it) — per Bird's Figma
      update, moved out of the dark-canvas-overlay treatment entirely: brown
@@ -263,6 +280,14 @@
 <!-- text is set from the staff-selected gesture in main.js (gestureHintText) -->
 <div id="gestureHint"></div>
 <canvas id="outCanvas"></canvas>
+<button id="switchCameraBtn" type="button" aria-label="สลับกล้องหน้า/หลัง">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17 2l4 4-4 4"/>
+    <path d="M21 6H8a4 4 0 0 0-4 4v1"/>
+    <path d="M7 22l-4-4 4-4"/>
+    <path d="M3 18h13a4 4 0 0 0 4-4v-1"/>
+  </svg>
+</button>
 
 <div id="entry">
   <img id="entryHero" src="/entry-hero.png" alt="I and B, 25 07 2026">

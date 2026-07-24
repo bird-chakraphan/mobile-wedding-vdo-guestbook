@@ -33,7 +33,9 @@ const PRE_ROLL_SECONDS = 3;
 // selfie view. Confirmed NOT flipped on this Mac's Chrome (unflipped
 // labels matched real hands). NOTE: desktop webcams and phone front
 // cameras can differ in whether the raw stream is pre-mirrored — re-check
-// this on the actual phone during Step 1's real-device test.
+// this on the actual phone during Step 1's real-device test. Only ever
+// verified against the front camera — switchCameraBtn's back-camera path
+// hasn't been checked against a real device either.
 const HANDEDNESS_FLIPPED = false;
 
 // Tuning aid for gesture detection — draws the 21 hand landmarks, bone
@@ -64,6 +66,7 @@ const status  = document.getElementById('status');
 const controls = document.getElementById('controls');
 const recordBtn = document.getElementById('recordBtn');
 const stopBtn = document.getElementById('stopBtn');
+const switchCameraBtn = document.getElementById('switchCameraBtn');
 const result = document.getElementById('result');
 const previewVideo = document.getElementById('previewVideo');
 // Reveals the clip only once it actually has a frame to show (see
@@ -199,18 +202,33 @@ let guestName = '';
 // on top of the one that never stopped.
 let cameraActive = false;
 
+// 'user' (front/selfie) is the default guests land on; switchCameraBtn
+// toggles this to 'environment' (back) and re-runs startCamera(). Passed
+// as a bare value (not {exact: ...}), so per spec it's an ideal/preferred
+// match rather than a hard requirement — a single-camera device (e.g. a
+// laptop webcam, used when previewing this on desktop) just keeps
+// whatever camera it has instead of throwing.
+let facingMode = 'user';
+
 // Shared by the first camera grant (startBtn) and every retake
 // (retryBtn) — recording end always releases the hardware, so a
 // retake has to re-request getUserMedia rather than reuse a track.
 async function startCamera() {
   cameraStream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: 'user', width: 1280, height: 720 },
+    video: { facingMode, width: 1280, height: 720 },
     audio: true
   });
   video.srcObject = cameraStream;
   await video.play();
   micTrack = cameraStream.getAudioTracks()[0];
   cameraActive = true;
+  // Selfie mirror only makes sense for the front camera — the back
+  // camera previews true-to-life, like every other camera app. Only a
+  // CSS/preview concern: the recorded clip comes from the canvas's real
+  // pixel buffer (drawn un-mirrored either way), never from this
+  // transform — see drawFrame()'s matching check for the one place that
+  // draws INTO that buffer and has to counter-mirror to compensate.
+  out.classList.toggle('mirrored', facingMode === 'user');
 }
 
 function stopCamera() {
@@ -235,6 +253,7 @@ startBtn.addEventListener('click', async () => {
   entry.style.display = 'none';
   controls.style.display = 'flex';
   gestureHint.style.display = 'block';
+  switchCameraBtn.style.display = 'flex';
   // #status is never cleared once the recording countdown sets it (it just
   // sits there — no display toggling of its own) — invisible on the first
   // loop since gestureHint used to live elsewhere, but now that they share
@@ -248,11 +267,30 @@ startBtn.addEventListener('click', async () => {
   out.style.display = 'none';
 
   await startCamera();
+  resizeWorkCanvases();
+  requestAnimationFrame(loop);
+});
 
+// Off-screen compositing canvases are sized off the raw camera feed
+// (video.videoWidth/Height), which can differ between the front and back
+// cameras — re-run after every startCamera(), not just the first one.
+function resizeWorkCanvases() {
   for (const c of [blurCanvas, maskCanvas, skinCanvas, compCanvas]) {
     c.width = video.videoWidth; c.height = video.videoHeight;
   }
+}
 
+// Front/back toggle — only while the guest is looking at the live idle
+// preview. Disabled (not hidden) during pre-roll/recording so the button
+// stays where the guest's thumb already is, matching stopBtn instead of
+// suddenly moving/disappearing.
+switchCameraBtn.addEventListener('click', async () => {
+  if (!cameraActive || recording || preRolling) return;
+  facingMode = facingMode === 'user' ? 'environment' : 'user';
+  stopCamera();
+  out.style.display = 'none';
+  await startCamera();
+  resizeWorkCanvases();
   requestAnimationFrame(loop);
 });
 
@@ -384,10 +422,16 @@ function loadFrameImage(url) {
   loadCorsImage(url, state => { frameImage = state; });
 }
 
-// The output canvas is CSS-mirrored (selfie view); counter-mirror the frame
-// as we draw so any text/logo in it still reads correctly on screen.
+// The output canvas is CSS-mirrored on the front camera only (selfie
+// view); counter-mirror the frame as we draw so any text/logo in it still
+// reads correctly on screen. Back camera isn't CSS-mirrored, so drawing
+// it plain already reads correctly there.
 function drawFrame(ctx, boxW, boxH) {
   if (!frameImage || !shouldUseGraphicImage(frameImage)) return;
+  if (!out.classList.contains('mirrored')) {
+    ctx.drawImage(frameImage.img, 0, 0, boxW, boxH);
+    return;
+  }
   ctx.save();
   ctx.translate(boxW, 0);
   ctx.scale(-1, 1);
@@ -652,6 +696,9 @@ function runPreRoll() {
   gestureHint.style.display = 'none';
   recordBtn.style.display = 'none';
   stopBtn.style.display = 'inline-flex';
+  // Stays disabled through both pre-roll and the recording it leads into —
+  // beginRecording() doesn't touch it, so this one line covers both.
+  switchCameraBtn.disabled = true;
   preRollEl.style.display = 'flex';
   preRollEl.textContent = String(PRE_ROLL_SECONDS);
   const started = performance.now();
@@ -678,6 +725,7 @@ function cancelPreRoll() {
   recordBtn.style.display = 'inline-flex';
   stopBtn.style.display = 'none';
   gestureHint.style.display = 'block';
+  switchCameraBtn.disabled = false;
 }
 
 function beginRecording() {
@@ -774,9 +822,11 @@ function onRecordingStop() {
   setupSaveToPhotos(blob, filename);
 
   controls.style.display = 'none';
+  switchCameraBtn.style.display = 'none';
   recordBtn.style.display = 'inline-flex';
   stopBtn.style.display = 'none';
   stopBtn.disabled = false;
+  switchCameraBtn.disabled = false;
 
   uploadClip(blob, filename);
 }
