@@ -210,7 +210,10 @@
        their combined height happened to land */
     justify-content: flex-start; gap: 16px; padding: 60px 24px 24px; box-sizing: border-box;
   }
-  #result video { max-width: 92vw; max-height: 65vh; border-radius: 12px; }
+  #result video {
+    max-width: 92vw; max-height: 65vh; box-sizing: border-box;
+    border-radius: 12px; border: 1px solid #000;
+  }
   #uploadStatus { color: var(--accent-brown); font-size: 20px; text-align: center; }
   /* pinned to the bottom like every other screen's button(s), rather than
      flowing inside #result's centred column — pulling it out of flow this
