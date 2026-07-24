@@ -8,7 +8,7 @@
      white bar over the warm gradient background. Kept in sync with
      body.recording-active in main.js since the page background itself
      switches to black during pre-roll/recording. -->
-<meta name="theme-color" content="#fae6dc">
+<meta name="theme-color" content="#fbefe9">
 <title>Wedding VDO Guest Book</title>
 <style>
   /* Self-hosted rather than linked from Google Fonts: guests join over
@@ -48,6 +48,14 @@
     /* warm cream/peach look from Bird's Figma redesign — one place to
        tweak the palette rather than repeating hex values per element */
     --warm-gradient: radial-gradient(120% 90% at 28% 22%, #fae6dc 0%, #ffffff 65%);
+    /* solid backing colour for the gradient surfaces. NOT the gradient's
+       #fae6dc anchor (its warm centre) — that's the darkest point, and iOS
+       paints its status-bar/toolbar chrome from this solid colour, leaving a
+       visible seam where the dark strip met the much lighter gradient right
+       below it. Sampled from the gradient's actual colour at its TOP EDGE so
+       the chrome and the content meet with no line. Keep the theme-color meta
+       and main.js's idle theme-color literal in sync with this. */
+    --warm-solid: #fbefe9;
     --accent-peach: #f8ad7c;
     --accent-peach-border: #c1bf89;
     --accent-brown: #743f17;
@@ -69,7 +77,7 @@
        toolbar) from html/body's actual background-color — a gradient only
        sets background-image, leaving background-color transparent, which
        is why the status bar was still white after the theme-color fix */
-    background: #fae6dc var(--warm-gradient); overflow: hidden;
+    background: var(--warm-solid) var(--warm-gradient); overflow: hidden;
     font-family: 'Noto Sans Thai', sans-serif;
   }
 
@@ -123,7 +131,7 @@
   /* All offsets below are pulled from the Figma frame's real metadata
      (375x812 reference), not eyeballed — see get_metadata on node 1:3. */
   #entry {
-    position: absolute; z-index: 10; inset: 0; background: #fae6dc var(--warm-gradient);
+    position: absolute; z-index: 10; inset: 0; background: var(--warm-solid) var(--warm-gradient);
     display: flex; flex-direction: column; align-items: center;
     justify-content: flex-start; gap: 56px; color: var(--accent-brown); text-align: center;
     /* top raised from Figma's exact 40px to 60px so it lines up with the
@@ -218,7 +226,7 @@
   #stopBtn { display: none; }
 
   #result {
-    position: absolute; z-index: 20; inset: 0; background: #fae6dc var(--warm-gradient);
+    position: absolute; z-index: 20; inset: 0; background: var(--warm-solid) var(--warm-gradient);
     display: none; flex-direction: column; align-items: center;
     /* top-anchored (was centred) to match the same 60px top as every
        other screen — centring let the message+video pair float wherever

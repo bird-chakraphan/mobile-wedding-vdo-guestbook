@@ -595,9 +595,12 @@ recordBtn.addEventListener('click', () => {
 // Keeps iOS Safari's status bar/toolbar chrome (theme-color) matching
 // whichever background body.recording-active currently selects, instead
 // of it defaulting to a stark white bar over the warm gradient.
+// The idle value is --warm-solid from index.html (the gradient's top-edge
+// colour, so the chrome blends into the content with no seam) — keep the two
+// in sync; recording goes solid black to match body.recording-active.
 function setRecordingActive(active) {
   document.body.classList.toggle('recording-active', active);
-  if (themeColorMeta) themeColorMeta.content = active ? '#000000' : '#fae6dc';
+  if (themeColorMeta) themeColorMeta.content = active ? '#000000' : '#fbefe9';
 }
 
 // 3-second on-screen countdown so the guest can get ready — recording
